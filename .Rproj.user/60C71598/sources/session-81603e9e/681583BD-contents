@@ -1,0 +1,1646 @@
+#### LFQ quantification tab ui ####
+
+lfq_ui <- function(id){
+  ns <- NS(id)
+  tagList(
+    br(),
+    fluidRow(
+      box(
+        column(6,uiOutput(ns("downloadTable")),offset = 1), 
+        column(4,uiOutput(ns("downloadButton"))), # make the button on same line
+        width = 4),
+      
+      infoBoxOutput(ns("significantBox"),width = 4),
+      box(
+        column(5,uiOutput(ns("downloadreport"))), # offset for dist between buttons
+        width = 4)
+    ),  #close first fluidRow 
+    
+    # align save button
+    tags$style(type='text/css', 
+               paste0("#",
+                      ns("downloadButton"),
+                      "{ width:100%; margin-top: 25px;}")
+               ), 
+    tags$style(type='text/css', 
+               paste0("#",
+                      ns("downloadreport"),
+                      "{ width:100%; vertical-align- middle; margin-top: 25px;  margin-bottom: 25px;}")
+               ),
+    
+    tags$br(), # Blank lines
+    
+    ## Data table and result plots box
+    fluidRow(
+      tags$style(
+        ".box {border-top: none;
+        box-shadow: 0 0px 0px rgb(0 0 0 / 10%);}"
+      ),
+      box(
+        title = "LFQ Results Table",
+        shinycssloaders::withSpinner(DT::dataTableOutput(ns("contents")),
+                                     color = "#3c8dbc"),
+        actionButton(ns("original"), "Refresh Table"),
+        width = 6,
+        status = "success",
+        solidHeader = TRUE
+      ),
+      box(
+        width= 6,
+        collapsible = TRUE,
+        #status="primary",
+        #solidHeader=TRUE,
+        tabBox(
+          title = "Result Plots",
+          width = 12,
+          tabPanel(title = "Volcano plot",
+                   fluidRow(
+                     box(uiOutput(ns("volcano_cntrst")), width = 6),
+                     # box(numericInput(ns("fontsize"),
+                     #                  "Font size",
+                     #                  min = 0, max = 8, value = 4),
+                     #     width = 3),
+                     box(checkboxInput(ns("check_names"),
+                                       "Display names",
+                                       value = FALSE),
+                         checkboxInput(ns("p_adj"),
+                                       "Adjusted p values",
+                                       value = FALSE),
+                         width = 3),
+                     box(checkboxInput(ns("check_imputation"),
+                                       "Imputed percentage",
+                                       value = FALSE),
+                         width = 3)
+                     
+                   ),
+
+                   fluidRow(
+                     tags$p("Select protein from LFQ Results Table to highlight on the plot OR
+                                                  drag the mouse on plot to show expression of proteins in Table"),
+                     shinycssloaders::withSpinner(plotOutput(ns("volcano"), height = 600,
+                                                             brush = ns("protein_brush"),
+                                                             click = ns("protein_click")),
+                                                  color = "#3c8dbc"),
+                     # downloadButton(ns('downloadVolcano'), 'Save Highlighted Plot'),
+                     # actionButton(ns("resetPlot"), "Clear Selection")
+                     fluidRow(
+                       column(9,
+                              actionButton(ns("resetPlot"), "Clear Selection")),
+                       column(3,
+                              save_plot_right_ui(ns("volcano")))
+                     )
+                     #)),
+                   )),
+          tabPanel(title= "Heatmap",
+                   fluidRow(
+                     box(tags$div(class="inline", numericInput(ns("k_number"),
+                                                               "Number of clusters in heatmap:  ",
+                                                               min = 1, max = 20, value = 6)),
+                         width = 7
+                         ),
+                     box(
+                       checkboxInput(ns("order_heatmap"),
+                                     "In experiment design order",
+                                     value = FALSE),
+                       width = 5
+                     )
+                   ),
+                   fluidRow(
+                     shinycssloaders::withSpinner(plotOutput(ns("heatmap"), height = 600),
+                                                  color = "#3c8dbc")
+                   ),
+                   fluidRow(
+                     box(numericInput(ns("cluster_number"),
+                                      "Cluster to download",
+                                      min=1, max=6, value = 1), width = 5),
+                     box(downloadButton(ns('downloadCluster'),"Save Cluster"),width = 3),
+                     box(
+                     #   dropdownButton(
+                     #   inputId = ns("hm_dropdown"),
+                     #   label = "Save svg",
+                     #   circle = FALSE,
+                     #   width = "150px",
+                     #   up = TRUE,
+                     #   numericInput(ns("hm_h"), "Height", value = 8),
+                     #   numericInput(ns("hm_w"), "Width", value = 8),
+                     #   downloadButton(ns('download_hm_svg'), "Download")
+                     # ),
+                     # downloadButton(ns('download_hm_svg'), "Save svg"),
+                       save_plot_right_ui(ns("heatmap")),
+                     width = 3)
+                   ),
+                   # align save button
+                   tags$style(type='text/css',
+                              paste0("#",
+                                     ns("downloadCluster"),
+                                     "{margin-top: 25px;}")
+                   ),
+                   tags$style(type='text/css',
+                              paste0("#",
+                                     ns("hm_dropdown"),
+                                     "{margin-top: 25px;}")
+                   ),
+                   tags$style(type="text/css", 
+                              ".inline label{ display: table-cell; text-align: center; padding-right:1%;vertical-align: middle; }
+                                   .inline .form-group { display: table-row;}")
+          ),
+
+          tabPanel(title = "Protein Plot",
+                   fluidRow(
+                     box(radioButtons(ns("type"),
+                                      "Plot type",
+                                      choices = c("Box Plot"= "boxplot",
+                                                  "Violin Plot"="violin",
+                                                  "Interaction Plot"= "interaction",
+                                                  "Intensity Plot"="dot"
+                                      ),
+                                      selected = "boxplot",
+                                      inline = TRUE),
+                         width = 10
+                     ),
+                     box(
+                       dropdownButton(
+                         inputId = ns("protein_dropdown"),
+                         tags$h4("Significance levels"),
+                         checkboxInput(ns("sig_show"),
+                                       "Show significance",
+                                       value = FALSE),
+                         checkboxInput(ns("sig_adj"),
+                                       "Adjusted p values",
+                                       value = FALSE),
+                         checkboxInput(ns("sig_ns"),
+                                       "Hide Not significant",
+                                       value = TRUE),
+                         circle = FALSE, status = "default",
+                         icon = icon("gear"), width = "150px",
+                         tooltip = tooltipOptions(title = "Significance levels"),
+                         right = TRUE
+                       ),
+                       width = 2
+                     )
+                     
+                   ),
+                   fluidRow(
+                     tags$p("Select one or more rows from LFQ Results Table to plot individual
+                                                  protein intesities across conditions and replicates")
+                   ),
+                   fluidRow(
+                     shinycssloaders::withSpinner(plotOutput(ns("protein_plot")),
+                                                  color = "#3c8dbc"),
+                     # dropdownButton(
+                     #   label = "Download Plot",
+                     #   circle = FALSE,
+                     #   width = "150px",
+                     #   up = TRUE,
+                     #   numericInput(ns("protein_h"), "Height", value = 7),
+                     #   numericInput(ns("protein_w"), "Width", value = 7),
+                     #   downloadButton(ns('downloadProtein'), 'Save')
+                     # )
+                     save_plot_left_ui(ns("protein_plot"))
+                   )
+          ),
+          navbarMenu("Abundance Plot",
+                     tabPanel(title = "Abundance rank",
+                              fluidRow(
+                                tags$p("Select protein from LFQ Results Table to highlight on the plot OR
+                                                  drag the mouse on plot to show expression of proteins in Table")
+                                ),
+                              fluidRow(
+                                shinycssloaders::withSpinner(plotOutput(ns("abundance_rank"),
+                                                                        height = 600,
+                                                                        brush = ns("protein_brush_rank"),
+                                                                        click = ns("protein_click_rank")),
+                                                             color = "#3c8dbc"),
+                                downloadButton(ns('downloadAbundance_rank'), 'Save Highlighted Plot'),
+                                actionButton(ns("resetPlot_rank"), "Clear Selection")
+                                )
+                              ),
+                     tabPanel("Abundance comparison",
+                              fluidRow(
+                                column(uiOutput(ns("abundance_cntrst")), width = 12),
+                                tags$p("Select protein from LFQ Results Table to highlight on the plot OR
+                                                  drag the mouse on plot to show expression of proteins in Table")
+                              ),
+                              fluidRow(
+                                shinycssloaders::withSpinner(plotOutput(ns("abundance_comp"),
+                                                                        height = 600,
+                                                                        brush = ns("protein_brush_comp"),
+                                                                        click = ns("protein_click_comp")),
+                                                             color = "#3c8dbc"),
+                                downloadButton(ns('downloadAbundance_comp'), 'Save Highlighted Plot'),
+                                actionButton(ns("resetPlot_comp"), "Clear Selection")
+                              )
+                     )
+          ) # navbarMenu close
+        ) # tabBox end
+      ) # box or column end
+
+    ), # result fluidRow close
+    
+    # QC Box
+    fluidRow(
+      column(
+        width=6,
+        tabBox(title = "QC Plots", width = 12,
+               navbarMenu(
+                 title = "PCA Plot",
+                 tabPanel("Static", 
+                          fluidRow(
+                            column(12,
+                                   column(8),
+                                   column(4,
+                                          checkboxInput(ns("pca_label"),
+                                                        "Show labels",
+                                                        value = FALSE))),
+                            column(12,
+                                   shinycssloaders::withSpinner(plotOutput(ns("pca_plot")),
+                                                                color = "#3c8dbc"),
+                                   downloadButton(ns('download_pca_svg'), "Save svg"))
+                          )
+                          ),
+                 tabPanel("Plotly", 
+                          fluidRow(
+                            column(12,
+                                   shinycssloaders::withSpinner(plotlyOutput(ns("pca_plotly")),
+                                                                color = "#3c8dbc"))
+                          )
+                          )
+               ),
+               tabPanel(title="Sample Correlation",
+                        shinycssloaders::withSpinner(plotOutput(ns("sample_corr"), height = 600),
+                                                     color = "#3c8dbc"),
+                        downloadButton(ns('download_corr_svg'), "Save svg")
+               ),
+               tabPanel(title = "Sample scatterplots",
+                        fluidRow(
+                          column(12,
+                                 column(10,
+                                        "First few samples are selected by default, click setting bar to change the selection" ),
+                                 column(2,
+                                        dropdownButton(
+                                          selectInput(ns("scatter_sample"),
+                                                      "Selected Samples",
+                                                      multiple = TRUE,
+                                                      selected = NULL,
+                                                      choices = "",
+                                                      width = "100%"),
+                                          checkboxInput(ns("scatter_check"),
+                                                        label = "Include proteins after imputation", 
+                                                        value = FALSE),
+                                          circle = FALSE, status = "default",
+                                          icon = icon("gear"), width = "300px",
+                                          tooltip = tooltipOptions(title = "Advanced settings !"),
+                                          right = TRUE))
+                          ),
+                          column(12,
+                                 shinycssloaders::withSpinner(plotOutput(ns("scatterplot"), height = 560),
+                                                              color = "#3c8dbc"),
+                                 downloadButton(ns('download_scatter_svg'), "Save svg")
+                          )
+                        )
+               ),
+               tabPanel(title= "Sample CVs",
+                        shinycssloaders::withSpinner(plotOutput(ns("sample_cvs"), height = 600),
+                                                     color = "#3c8dbc"),
+                        downloadButton(ns('download_cvs_svg'), "Save svg")
+               ),
+               tabPanel(title = "Protein Numbers",
+                        tags$div(class="inline1",
+                                 selectInput(ns("numbers_group"),
+                                             "Group by",
+                                             choices = c("condition","replicate"))
+                                 ),
+                        shinycssloaders::withSpinner(plotOutput(ns("numbers"), height = 560),
+                                                     color = "#3c8dbc"),
+                        downloadButton(ns('download_num_svg'), "Save svg"),
+                        tags$style(type="text/css", 
+                                   ".inline1 label.control-label,.inline1 .selectize-control.single { 
+                                   display: table-cell; 
+                                   text-align: left; 
+                                   vertical-align: middle; 
+                                   } 
+                                   .inline1 label.control-label {
+                                   padding-right: 10px;
+                                   }
+                                   .inline1 .form-group { 
+                                   display: table-row;
+                                   }
+                                   .inline1 .selectize-control.single div.item {
+                                   padding-right: 60px;
+                                   }")
+               ),
+
+               tabPanel(title = "Sample coverage",
+                        shinycssloaders::withSpinner(plotOutput(ns("coverage"), height = 600),
+                                                     color = "#3c8dbc"),
+                        downloadButton(ns('download_cov_svg'), "Save svg")
+               ),
+               tabPanel(title = "Normalization",
+                        tags$div(class="inline1",
+                                 selectInput(ns("norm_group"),
+                                             "Group by",
+                                             choices = c("condition","replicate"))
+                                 ),
+                        shinycssloaders::withSpinner(plotOutput(ns("norm"), height = 560),
+                                                     color = "#3c8dbc"),
+                        
+                        dropdownButton(
+                          label = "Save svg",
+                          circle = FALSE,
+                          width = "150px",
+                          up = TRUE,
+                          numericInput(ns("norm_h"), "Height", value = 8),
+                          numericInput(ns("norm_w"), "Width", value = 8),
+                          downloadButton(ns('download_norm_svg'), "Download")
+                        )
+                        
+                        # downloadButton(ns('download_norm_svg'), "Save svg")
+               ),
+               tabPanel(title = "Missing values - Heatmap",
+                        fluidRow(
+                          column(12,
+                                 column(8),
+                                 column(4,
+                                        checkboxInput(ns("full_missval"),
+                                                      "Show full dataset",
+                                                      value = FALSE))),
+                          column(12,
+                                 shinycssloaders::withSpinner(plotOutput(ns("missval"), height = 560),
+                                                              color = "#3c8dbc"),
+                                 downloadButton(ns('download_missval_svg'), "Save svg")
+                                 )
+                        )
+               ),
+               tabPanel(title = "Imputation",
+                        shinycssloaders::withSpinner(plotOutput(ns("imputation"), height = 600),
+                                                     color = "#3c8dbc"),
+                        downloadButton(ns('download_imp_svg'), "Save svg")
+               )
+        ) # Tab box close
+      ),
+      column(
+        width=6,
+        tabBox(title = "Enrichment", width = 12,
+               tabPanel(title="Gene Ontology",
+                        fluidRow(
+                          column(7,
+                                 uiOutput(ns("contrast"))),
+                          column(5,
+                                 selectInput(ns("go_database"), "GO database:",
+                                             c("Molecular Function"="GO_Molecular_Function_2021",
+                                               "Cellular Component"="GO_Cellular_Component_2021",
+                                               "Biological Process"="GO_Biological_Process_2021"))
+                          ),
+                          column(12,
+                                 column(7, actionButton(ns("go_analysis"), "Run Enrichment")),
+                                 column(5, tags$b(" Note:")," Currently, only HUGO gene names are supported")
+                                 ),
+                          column(12,
+                                 box(width = 12,uiOutput(ns("spinner_go")),height = 400)
+                          ),
+                          column(12,downloadButton(ns('downloadGO'), 'Download Table'))
+                        )
+                        
+                        # box(uiOutput(ns("contrast")), width = 7),
+                        # box(
+                        #   selectInput(ns("go_database"), "GO database:",
+                        #               c("Molecular Function"="GO_Molecular_Function_2017b",
+                        #                 "Cellular Component"="GO_Cellular_Component_2017b",
+                        #                 "Biological Process"="GO_Biological_Process_2017b")),
+                        #   width= 5),
+                        # actionButton(ns("go_analysis"), "Run Enrichment"),
+                        # plotOutput(ns("go_enrichment")),
+                        # downloadButton(ns('downloadGO'), 'Download Table')
+
+               ),
+               tabPanel(title= "Pathway enrichment",
+                        fluidRow(
+                          column(7,
+                                 uiOutput(ns("contrast_1"))),
+                          column(5,
+                                 selectInput(ns("pathway_database"), "Pathway database:",
+                                             c("KEGG"="KEGG_2021_Human",
+                                               "Reactome"="Reactome_2022"))
+                          ),
+                          column(12,
+                                 column(7, actionButton(ns("pathway_analysis"), "Run Enrichment")),
+                                 column(5, tags$b(" Note:")," Currently, only HUGO gene names are supported")
+                                 ),
+                          column(12,
+                                 box(width = 12,uiOutput(ns("spinner_pa")),height = 400)
+                          ),
+                          column(12,downloadButton(ns('downloadPA'), 'Download Table'))
+                        )
+                        
+                        # 
+                        # box(uiOutput(ns("contrast_1")), width = 5),
+                        # box(
+                        #   selectInput(ns("pathway_database"), "Pathway database:",
+                        #               c("KEGG"="KEGG_2016",
+                        #                 "Reactome"="Reactome_2016")),
+                        #   width= 5),
+                        # actionButton(ns("pathway_analysis"), "Run Enrichment"),
+                        # plotOutput(ns("pathway_enrichment")),
+                        # downloadButton(ns('downloadPA'), 'Download Table')
+               )
+        ) # Tab box close
+      ) # column end
+    ), # fluidrow qc close
+    shinyfullscreen::fullscreen_those(items = list(ns("heatmap"),
+                                                   ns("protein_plot"),
+                                                   ns("sample_corr"),
+                                                   ns("scatterplot"),
+                                                   ns("norm"),
+                                                   ns("missval")
+    ))
+  )
+  }
+
+
+#### LFQ quantification tab server ####
+
+#processed_data(), imputed_data(), normalised_data(), dep()
+lfq_server <- function(id,processed_data, normalised_data,imputed_data,diff_all, multifactor, dep, maxquant_data_input,exp_design_input,p, lfc,norm_type){
+  moduleServer(
+    id,
+    function(input, output,session){
+      ns <- session$ns   
+      
+      comparisons<-reactive ({
+        if (grepl("_dm$",id)){
+          comparisons<-gsub("_p.adj", "", 
+                            colnames(SummarizedExperiment::rowData(dep()))[grep("p.adj", 
+                                                                                   colnames(SummarizedExperiment::rowData(dep())))])
+        }else{
+          temp<-capture.output(DEP::test_diff(imputed_data(),type='all'),type = "message")
+          gsub(".*: ","",temp)
+          ## Split conditions into character vector
+          unlist(strsplit(temp,","))
+          ## Remove leading and trailing spaces
+          trimws(temp)
+        }
+
+      })
+      
+      output$volcano_cntrst <- renderUI({
+        if (!is.null(comparisons())) {
+          df <- SummarizedExperiment::rowData(dep())
+          cols <- grep("_significant$",colnames(df))
+          selectizeInput(ns("volcano_cntrst"),
+                         "Comparison",
+                         choices = gsub("_significant", "", colnames(df)[cols]))
+        }
+      })
+      
+      ##comparisons
+      output$contrast <- renderUI({
+        if (!is.null(comparisons())) {
+          df <- SummarizedExperiment::rowData(dep())
+          cols <- grep("_significant$",colnames(df))
+          selectizeInput(ns("contrast"),
+                         "Comparison",
+                         choices = gsub("_significant", "", colnames(df)[cols]))
+        }
+      })
+      
+      output$contrast_1 <- renderUI({
+        if (!is.null(comparisons())) {
+          df <- SummarizedExperiment::rowData(dep())
+          cols <- grep("_significant$",colnames(df))
+          selectizeInput(ns("contrast_1"),
+                         "Comparison",
+                         choices = gsub("_significant", "", colnames(df)[cols]))
+        }
+      })
+      
+      output$downloadTable <- renderUI({
+        if(!is.null(dep())){
+          selectizeInput(ns("dataset"),
+                         "Choose a dataset to save" ,
+                         c("Results","Original_matrix",
+                           "Imputed_matrix",
+                           "Full_dataset",
+                           "RData"))
+        }
+      })
+      
+      output$downloadButton <- renderUI({
+        if(!is.null(dep())){
+          downloadButton(ns('downloadData'), 'Save')
+        }
+      })
+      
+      output$downloadreport <- renderUI({
+        if(!is.null(dep())){
+          downloadButton(ns('downloadReport'), 'Download Report')
+        }
+      })
+      
+      # update numbers, normalisation and scatter matrix plots UI 
+      observe({
+        req(multifactor())
+        #TODO a <- multifactor()[!multifactor() == "replicate"
+        if(!is.null(multifactor())){
+          updateSelectInput(session, 
+                            "numbers_group",
+                            "Group by",
+                            choices = c("condition","replicate",multifactor()[!multifactor() == "replicate"]))
+          
+          updateSelectInput(session, 
+                            "norm_group",
+                            "Group by",
+                            choices = c("condition","replicate",multifactor()[!multifactor() == "replicate"]))
+        }
+      })
+      
+      observe({
+        req(processed_data())
+        if(!is.null(processed_data())){
+              sample_list <- reactive({
+                colnames(SummarizedExperiment::assay(processed_data()) %>% data.frame())
+              })
+              updateSelectInput(session, 
+                                "scatter_sample",
+                                "Selected Samples",
+                                selected = sample_list()[1:6],
+                                choices = sample_list())
+        }
+      })
+      
+      ## Results plot inputs
+      
+      # PCA Plot
+      pca_input<- reactive({
+        if (num_total()<=500){
+          if(length(levels(as.factor(colData(dep())$replicate))) <= 6){
+            pca_plot<-plot_pca_new(dep(), n=num_total(), label = input$pca_label)
+            pca_plot<-pca_plot + labs(title = "PCA Plot")
+            return(pca_plot)
+          }
+          else{
+            pca_plot<-plot_pca_new(dep(), n=num_total(),indicate = "condition", label = input$pca_label)
+            pca_plot<-pca_plot + labs(title = "PCA Plot")
+            return(pca_plot)
+          }
+        }
+        else{
+          if(length(levels(as.factor(colData(dep())$replicate))) <= 6){
+            pca_plot<-plot_pca_new(dep(), label = input$pca_label)
+            pca_plot<-pca_plot + labs(title = "PCA Plot")
+            return(pca_plot)
+          }
+          else{
+            pca_plot<-plot_pca_new(dep(), indicate = "condition", label = input$pca_label)
+            pca_plot<-pca_plot + labs(title = "PCA Plot")
+            return(pca_plot)
+          }
+        }
+      })
+      
+      pca_plotly_input <- reactive({
+        if (num_total()<=500){
+          if(length(levels(as.factor(colData(dep())$replicate))) <= 6){
+            pca_plotly<-plot_pca_plotly(dep(), n=num_total())
+            return(pca_plotly)
+          }
+          else{
+            pca_plotly<-plot_pca_plotly(dep(), n=num_total(),indicate = "condition")
+            return(pca_plotly)
+          }
+        }
+        else{
+          if(length(levels(as.factor(colData(dep())$replicate))) <= 6){
+            pca_plotly<-plot_pca_plotly(dep())
+            return(pca_plotly)
+          }
+          else{
+            pca_plotly<-plot_pca_plotly(dep(), indicate = "condition")
+            return(pca_plotly)
+          }
+        }
+      })
+      
+      ## Heatmap Differentially expressed proteins
+      heatmap_cluster <- reactive({
+        if(input$order_heatmap == "TRUE"){
+          cluster_columns <- FALSE
+        } else {
+          cluster_columns <- TRUE
+        }
+        heatmap_list <- get_cluster_heatmap(dep(),
+                                            type="centered",kmeans = TRUE,
+                                            k=input$k_number, 
+                                            cluster_columns = cluster_columns,
+                                            col_limit = 6,
+                                            indicate = "condition"
+        )
+        return(heatmap_list)
+      })
+      
+      heatmap_input <- reactive({
+        heatmap_list <- heatmap_cluster()
+        heatmap_list[[1]]
+      })
+      
+      ### Volcano Plot
+      volcano_input <- reactive({
+        if(!is.null(input$volcano_cntrst)) {
+          plot_volcano_new(dep(),
+                           input$volcano_cntrst,
+                           # input$fontsize,
+                           4,
+                           input$check_names,
+                           input$check_imputation,
+                           input$p_adj)
+          
+        }
+      })
+      
+      volcano_df<- reactive({
+        if(!is.null(input$volcano_cntrst)) {
+          get_volcano_df(dep(),
+                         input$volcano_cntrst,
+                         input$p_adj)
+          
+        }
+      })
+      
+      volcano_input_selected<-reactive({
+        if(!is.null(input$volcano_cntrst)){
+          
+          if (!is.null(input$contents_rows_selected)){
+            proteins_selected<-data_result()[c(input$contents_rows_selected),]## get all rows selected
+          }
+          else if(!is.null(input$protein_brush)){
+            proteins_selected<-data_result()[data_result()[["Gene Name"]] %in% protein_name_brush(), ] 
+          }
+          
+          ## convert contrast to x and padj to y
+          diff_proteins <- grep(paste("^",input$volcano_cntrst, "_log2", sep = ""),
+                                colnames(proteins_selected))
+          if(input$p_adj=="FALSE"){
+            padj_proteins <- grep(paste("^",input$volcano_cntrst, "_p.val", sep = ""),
+                                  colnames(proteins_selected))
+          }
+          else{
+            padj_proteins <- grep(paste("^",input$volcano_cntrst, "_p.adj", sep = ""),
+                                  colnames(proteins_selected))
+          }
+          
+          df_protein <- data.frame(x = proteins_selected[, diff_proteins],
+                                   y = -log10(as.numeric(proteins_selected[, padj_proteins])),#)#,
+                                   name = proteins_selected$`Gene Name`,
+                                   percent_imputation = paste0("(",round((proteins_selected$num_NAs/length(colData(dep())$label))*100,1),"%)"))
+          df_protein$percent_imputation[df_protein$percent_imputation=="(0%)"] <- ""
+          # label include percentage of imputation or not
+          if (input$check_imputation == "TRUE") {
+            df_protein$name <- paste0(df_protein$name,df_protein$percent_imputation)
+          } else {
+            df_protein$name <- df_protein$name
+          }
+          #print(df_protein)
+          p<- volcano_input()
+          
+          ## use the dataframe to plot points
+          if (input$check_names == "TRUE"){
+            p + geom_point(data = df_protein, aes(x, y), fill = "red", size= 3, shape = 21)
+          } else {
+            
+            p + geom_point(data = df_protein, aes(x, y), fill = "red", size= 3, shape = 21) +
+              ggrepel::geom_text_repel(data = df_protein,
+                                       aes(x, y, label = name),
+                                       size = 4,
+                                       box.padding = unit(0.1, 'lines'),
+                                       point.padding = unit(0.1, 'lines'),
+                                       segment.size = 0.5)
+          }
+          
+        }
+      })
+      
+      protein_input<-reactive({ 
+        
+        df<- data_result()
+        if(!is.null(input$protein_brush)){
+          df<- df[df[["Gene Name"]] %in% protein_name_brush(), ] 
+        } 
+        
+        if(!is.null(input$protein_click)){
+          df<- df[df[["Gene Name"]] %in% protein_name_click(), ] 
+        } 
+        
+        protein_selected  <- df[input$contents_rows_selected,1]
+        protein_plot <- plot_protein(dep(),processed_data(), protein_selected, input$type)
+        # TODO: change back to import ggpubr::geom_pwc() after bug fixed
+        # add significance levels
+        if(input$sig_adj == "TRUE"){
+          label = "p.adj.signif"
+          hide = "p.adj"
+        } else {
+          label = "p.signif"
+          hide = "p"
+        }
+        
+        if(input$sig_show == "TRUE"){
+          if(input$sig_ns == "TRUE"){
+            protein_plot <- protein_plot + 
+              geom_pwc(method = "t.test",
+                       p.adjust.method = "BH",
+                       label = label,
+                       hide.ns = hide) + 
+              labs(caption = "(Method: T-Test)") + 
+              theme(plot.caption = element_text(size = 12))
+          } else {
+            protein_plot <- protein_plot + 
+              geom_pwc(method = "t.test",
+                       p.adjust.method = "BH",
+                       label = label) + 
+              labs(caption = "(Method: T-Test)") + 
+              theme(plot.caption = element_text(size = 12))
+          }
+        }
+        
+        rep_length <- length(levels(as.factor(colData(dep())$replicate)))
+        if(rep_length <= 8){
+          protein_plot <- protein_plot
+        } else if (rep_length > 8 & rep_length <= 12){
+          protein_plot <- protein_plot + scale_color_brewer(palette = "Paired")
+        } else {
+          protein_plot <- protein_plot + scale_colour_manual(values =scales::hue_pal()(rep_length))
+        }
+        return(protein_plot)
+      })
+      
+      ## QC Inputs
+      norm_input <- reactive({
+        if(norm_type() == "no"){
+          plot_normalization_new(list(processed_data()), 
+                                 labels = c("original"),
+                                 indicate = input$norm_group) + 
+            labs(subtitle = "No additional normalisation in MaxQuant data analysis")
+        } else {
+          plot_normalization_new(list(processed_data(), normalised_data()), 
+                                 labels = c("original", "vsn normalised"),
+                                 indicate = input$norm_group)
+        }
+      })
+      
+      missval_input <- reactive({
+        plot_missval_new(processed_data(),full_dataset = input$full_missval) # TRUE or FALSE
+      })
+      
+      detect_input <- reactive({
+        plot_detect(processed_data())
+      })
+      
+      imputation_input <- reactive({
+        plot_imputation_new(list(processed_data(), imputed_data()),
+                            labels = c("original", "imputed"))
+      })
+      
+      p_hist_input <- reactive({
+        plot_p_hist(dep())
+      })
+      
+      numbers_input <- reactive({
+        plot_numbers_new(processed_data(), indicate = input$numbers_group)
+      })
+      
+      coverage_input <- reactive({
+        plot_coverage(processed_data())
+      })
+      
+      correlation_input<-reactive({
+        plot_cor_new(dep(),significant = FALSE, indicate = "condition")
+      })
+      
+      cvs_input<-reactive({
+        plot_cvs(dep())
+      })
+      
+      num_total<-reactive({
+        dep() %>%
+          nrow()
+      }) 
+      
+      scatterplot_input <- reactive({
+       #TODO: option of choose imputed or origin data
+        if(!is.null(input$scatter_sample)){
+          if(input$scatter_check == "TRUE"){
+            plot_scatter(dep(),input$scatter_sample)
+          } else {
+            plot_scatter(processed_data(),input$scatter_sample)
+          }
+        }
+      })
+      
+      output$scatterplot <- renderPlot({
+        if(!is.null(input$scatter_sample)){
+          scatterplot_input()
+        }
+      })
+      
+      ## Enrichment inputs
+      
+      go_input<-eventReactive(input$go_analysis,{
+        progress_indicator("Gene ontology enrichment is in progress")
+        
+        if(!is.null(input$contrast)){
+          enrichment_output_test(dep(), input$go_database)
+          go_results<- test_gsea_mod(dep(), databases = input$go_database, contrasts = TRUE)
+          null_enrichment_test(go_results)
+          plot_go<- plot_enrichment(go_results, number = 5, alpha = 0.05, contrasts =input$contrast,
+                                    databases = input$go_database, nrow = 2, term_size = 8) + aes(stringr::str_wrap(Term, 60)) +
+            xlab(NULL)
+          go_list<-list("go_result"=go_results, "plot_go"=plot_go)
+          return(go_list)
+        }
+      })
+      
+      pathway_input<-eventReactive(input$pathway_analysis,{
+        progress_indicator("Pathway Analysis is running....")
+        enrichment_output_test(dep(), input$pathway_database)
+        pathway_results<- test_gsea_mod(dep(), databases=input$pathway_database, contrasts = TRUE)
+        null_enrichment_test(pathway_results)
+        plot_pathway<-plot_enrichment(pathway_results, number = 5, alpha = 0.05, contrasts =input$contrast_1,
+                                      databases=input$pathway_database, nrow = 3, term_size = 8) + aes(stringr::str_wrap(Term, 30)) +
+          xlab(NULL)
+        pathway_list<-list("pa_result"=pathway_results, "plot_pa"=plot_pathway)
+        return(pathway_list)
+      })
+      
+      #### Interactive UI
+      output$significantBox <- renderInfoBox({
+        num_total <- dep() %>%
+          nrow()
+        num_signif <- dep() %>% 
+          .[SummarizedExperiment::rowData(.)$significant, ] %>%
+          nrow()
+        frac <- num_signif / num_total
+        
+        info_box <- infoBox("Significant proteins",
+                              paste0(num_signif,
+                                     " out of ",
+                                     num_total),
+                              paste0(signif(frac * 100, digits = 3),
+                                     "% of proteins differentially expressed across all conditions"),
+                              icon = icon("stats", lib = "glyphicon"),
+                              color = "olive",
+                              # fill = TRUE,
+                              width = 4)
+        
+        return(info_box)
+      })
+      
+      ##### Get results dataframe from Summarizedexperiment object
+      data_result<-reactive({
+        get_results_proteins(dep())
+        #get_results(dep())
+      })
+      
+      #### Data table
+      output$contents <- DT::renderDataTable({
+        df<- data_result() %>% dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+        return(df)
+      },
+      options = list(scrollX = TRUE,
+                     autoWidth=TRUE,
+                     columnDefs= list(list(width = '400px', targets = c(-1))))
+      ) 
+      
+      ## Deselect all rows button
+      proxy <- dataTableProxy("contents")
+      
+      observeEvent(input$original,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result() %>% dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX = TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      protein_name_brush<- reactive({
+        protein_tmp<-brushedPoints(volcano_df(), input$protein_brush, 
+                                   xvar = "diff", yvar = "p_values")
+        protein_selected<-protein_tmp$name
+      }) 
+      protein_name_click<- reactive({
+        protein_tmp<-nearPoints(volcano_df(), input$protein_click, maxpoints = 1)
+        protein_selected<-protein_tmp$name
+      }) 
+      
+      ## Select rows dynamically
+      brush <- NULL
+      makeReactiveBinding("brush")
+      
+      observeEvent(input$protein_brush,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result()[data_result()[["Gene Name"]] %in% protein_name_brush(), ] %>% 
+            dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX= TRUE)
+        )
+      })
+      
+      observeEvent(input$resetPlot,{
+        session$resetBrush(ns("protein_brush"))
+        brush <<- NULL
+        
+        output$contents <- DT::renderDataTable({
+          df<- data_result() %>% dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX = TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      observeEvent(input$protein_click,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result()[data_result()[["Gene Name"]] %in% protein_name_click(), ] %>% 
+            dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX= TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      ## Render Result Plots
+      output$pca_plot<-renderPlot({
+        pca_input()
+      })
+      
+      output$pca_plotly<-renderPlotly({
+        pca_plotly_input()
+      })
+      
+      output$heatmap<-renderPlot({
+        progress_indicator("Heatmap rendering is in progress")
+        heatmap_input()
+      })
+      
+      output$volcano <- renderPlot({
+        # withProgress(message = 'Volcano Plot calculations are in progress',
+        #              detail = 'Please wait for a while', value = 0, {
+        #                for (i in 1:15) {
+        #                  incProgress(1/15)
+        #                  Sys.sleep(0.25)
+        #                }
+        #              })
+        if(is.null(input$contents_rows_selected) & is.null(input$protein_brush)){
+          volcano_input()
+        }
+        else if(!is.null(input$volcano_cntrst)){
+          volcano_input_selected()
+        }# else close
+      })
+      
+      output$protein_plot<-renderPlot({
+        if(!is.null(input$contents_rows_selected)){
+          protein_input()
+        }
+      })
+      
+      ### Abundance plot panel ####
+      #comparisons
+      output$abundance_cntrst <- renderUI({
+        if (!is.null(comparisons())) {
+          df <- SummarizedExperiment::rowData(dep())
+          cols <- grep("_significant$",colnames(df))
+          selectizeInput(ns("abundance_cntrst"),
+                         "Comparison",
+                         choices = gsub("_significant", "", colnames(df)[cols]))
+        }
+      })
+      
+      ## abundance rank plot
+      #abundance rank plot brush
+      protein_name_brush_rank <- reactive({
+        protein_tmp<-brushedPoints(data_result(), input$protein_brush_rank,
+                                   xvar = "rank", yvar = "mean_abundance")
+        protein_selected<-protein_tmp$`Gene Name`
+      })
+      protein_name_click_rank <- reactive({
+        protein_tmp<-nearPoints(data_result(), input$protein_click_rank, maxpoints = 1)
+        protein_selected<-protein_tmp$`Gene Name`
+      })
+      
+      abundance_rank_input <- reactive({
+        df <- SummarizedExperiment::rowData(dep())
+        cols <- grep("_significant$",colnames(df))
+        contrast <- gsub("_significant", "", colnames(df)[cols])[1]
+        p_list <- plot_abundance(data_result(), contrast)
+        p_list[[1]]
+      })
+      
+      abundance_rank_input_selected<-reactive({
+        if (!is.null(input$contents_rows_selected)){
+          proteins_selected<-data_result()[c(input$contents_rows_selected),]## get all rows selected
+        }
+        else if(!is.null(input$protein_brush_rank)){
+          proteins_selected<-data_result()[data_result()[["Gene Name"]] %in% protein_name_brush_rank(), ] 
+        }
+        
+        df_protein <- data.frame(x = proteins_selected$rank,
+                                 y = proteins_selected$mean_abundance,
+                                 name = proteins_selected$`Gene Name`)
+        
+        df <- SummarizedExperiment::rowData(dep())
+        cols <- grep("_significant$",colnames(df))
+        contrast <- gsub("_significant", "", colnames(df)[cols])[1]
+        p_list <- plot_abundance(data_result(),
+                                 contrast)
+        
+        p_list[[1]] + geom_point(data = df_protein, aes(x, y), color = "maroon", size= 3) +
+          ggrepel::geom_label_repel(data = df_protein,
+                                    aes(x, y, label = name),
+                                    nudge_y = 0.5,
+                                    size = 4,
+                                    box.padding = unit(0.1, 'lines'),
+                                    point.padding = unit(0.1, 'lines'),
+                                    segment.size = 0.5)## use the dataframe to plot points
+        
+      })
+      
+      output$abundance_rank <- renderPlot({
+        # withProgress(message = 'Abundance Plot calculations are in progress',
+        #              detail = 'Please wait for a while', value = 0, {
+        #                for (i in 1:15) {
+        #                  incProgress(1/15)
+        #                  Sys.sleep(0.25)
+        #                }
+        #              })
+        if(is.null(input$contents_rows_selected) & is.null(input$protein_brush_rank)){
+          abundance_rank_input()
+        }
+        else {
+          abundance_rank_input_selected()
+        }
+      })
+      
+      # abundance comparison plot
+      #abundance rank plot brush
+      protein_name_brush_comp <- reactive({
+        if(!is.null(input$abundance_cntrst)){
+          contrast1 <- input$abundance_cntrst %>% gsub("_vs.*", "",.)
+          contrast2 <- input$abundance_cntrst %>% gsub("^.*vs_", "",.)
+          
+          protein_tmp<-brushedPoints(data_result(), input$protein_brush_comp,
+                                     xvar = paste("mean", contrast1, sep = "_"), yvar = paste("mean", contrast2, sep = "_"))
+          protein_selected<-protein_tmp$`Gene Name`
+        }
+      })
+      protein_name_click_comp <- reactive({
+        if(!is.null(input$abundance_cntrst)){
+          contrast1 <- input$abundance_cntrst %>% gsub("_vs.*", "",.)
+          contrast2 <- input$abundance_cntrst %>% gsub("^.*vs_", "",.)
+          
+          
+          protein_tmp<-nearPoints(data_result(), input$protein_click_comp, 
+                                  xvar = paste("mean", contrast1, sep = "_"), yvar = paste("mean", contrast2, sep = "_"),
+                                  maxpoints = 1)
+          protein_selected<-protein_tmp$`Gene Name`
+        }
+      })
+      
+      abundance_comp_input <- reactive({
+        if(!is.null(input$abundance_cntrst)) {
+          p_list <- plot_abundance(data_result(),
+                                   input$abundance_cntrst)
+          p_list[[2]]
+        }
+      })
+      
+      abundance_comp_input_selected<-reactive({
+        if(!is.null(input$abundance_cntrst)){
+          
+          if (!is.null(input$contents_rows_selected)){
+            proteins_selected<-data_result()[c(input$contents_rows_selected),]## get all rows selected
+          }
+          else if(!is.null(input$protein_brush_comp)){
+            proteins_selected<-data_result()[data_result()[["Gene Name"]] %in% protein_name_brush_comp(), ]
+          }
+          
+          contrast1 <- input$abundance_cntrst %>% gsub("_vs.*", "",.)
+          contrast2 <- input$abundance_cntrst %>% gsub("^.*vs_", "",.)
+          
+          df_protein <- data.frame(x = proteins_selected[,grep(paste("^mean", contrast1, sep = "_"), colnames(proteins_selected))],
+                                   y = proteins_selected[,grep(paste("^mean", contrast2, sep = "_"), colnames(proteins_selected))],
+                                   name = proteins_selected$`Gene Name`)
+          
+          p_list <- plot_abundance(data_result(),
+                                   input$abundance_cntrst)
+          
+          p_list[[2]] + geom_point(data = df_protein, aes(x, y), color = "maroon", size= 3) +
+            ggrepel::geom_label_repel(data = df_protein,
+                                      aes(x, y, label = name),
+                                      nudge_y = 0.5,
+                                      size = 4,
+                                      box.padding = unit(0.1, 'lines'),
+                                      point.padding = unit(0.1, 'lines'),
+                                      segment.size = 0.5)## use the dataframe to plot points
+        }
+      })
+      
+      output$abundance_comp <- renderPlot({
+        # withProgress(message = 'Abundance Plot calculations are in progress',
+        #              detail = 'Please wait for a while', value = 0, {
+        #                for (i in 1:15) {
+        #                  incProgress(1/15)
+        #                  Sys.sleep(0.25)
+        #                }
+        #              })
+        if(is.null(input$contents_rows_selected) & is.null(input$protein_brush_comp)){
+          abundance_comp_input()
+        }
+        else if(!is.null(input$abundance_cntrst)){
+          abundance_comp_input_selected()
+        }
+      })
+      
+      output$downloadAbundance_rank <- downloadHandler(
+        filename = function() {
+          "Abundance_rank.svg"
+        },
+        content = function(file) {
+          if(is.null(input$contents_rows_selected)  & is.null(input$protein_brush_rank)){
+            p <- abundance_rank_input()
+          }
+          else{
+            p <- abundance_rank_input_selected()
+          }
+          svg(file, width = 8, height = 8)
+          print(p)
+          dev.off()
+        }
+      )
+      
+      output$downloadAbundance_comp <- downloadHandler(
+        filename = function() {
+          paste0("Abundance_", input$abundance_cntrst, ".svg")
+        },
+        content = function(file) {
+          if(is.null(input$contents_rows_selected) & is.null(input$protein_brush_comp)){
+            p <- abundance_comp_input()
+          }
+          else{
+            p <- abundance_comp_input_selected()
+          }
+          svg(file, width = 8, height = 8)
+          print(p)
+          dev.off()
+        }
+      )
+      
+      ## Select rows dynamically in abundance rank plot
+      observeEvent(input$protein_brush_rank,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result()[data_result()[["Gene Name"]] %in% protein_name_brush_rank(), ]  %>% 
+            dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX= TRUE)
+        )
+      })
+      
+      observeEvent(input$protein_click_rank,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result()[data_result()[["Gene Name"]] %in% protein_name_click_rank(), ]  %>% 
+            dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX= TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      ## Select rows dynamically in abundance comparison plot
+      
+      brush_comp <- NULL
+      makeReactiveBinding("brush_comp")
+      
+      observeEvent(input$protein_brush_comp,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result()[data_result()[["Gene Name"]] %in% protein_name_brush_comp(), ]  %>% 
+            dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX= TRUE)
+        )
+      })
+      
+      observeEvent(input$protein_click_comp,{
+        output$contents <- DT::renderDataTable({
+          df<- data_result()[data_result()[["Gene Name"]] %in% protein_name_click_comp(), ]  %>% 
+            dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX= TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      # reset abundance plots
+      observeEvent(input$resetPlot_rank,{
+        session$resetBrush(ns("protein_brush_rank"))
+        brush <<- NULL
+        
+        output$contents <- DT::renderDataTable({
+          df<- data_result() %>% dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX = TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      observeEvent(input$resetPlot_comp,{
+        session$resetBrush(ns("protein_brush_comp"))
+        brush_comp <<- NULL
+        
+        output$contents <- DT::renderDataTable({
+          df<- data_result() %>% dplyr::select(-dplyr::starts_with("mean"),-"rank") # drop mean abundance columns
+          return(df)
+        },
+        options = list(scrollX = TRUE,
+                       autoWidth=TRUE,
+                       columnDefs= list(list(width = '400px', targets = c(-1))))
+        )
+      })
+      
+      ### QC Outputs
+      output$sample_corr <-renderPlot({
+        correlation_input()
+      })
+      
+      output$sample_cvs <- renderPlot({
+        cvs_input()
+      })
+      
+      output$norm <- renderPlot({
+        norm_input()
+      })
+      
+      output$missval <- renderPlot({
+        missval_input()
+      })
+      
+      output$detect <- renderPlot({
+        detect_input()
+      })
+      
+      output$imputation <- renderPlot({
+        imputation_input()
+      })
+      
+      output$p_hist <- renderPlot({
+        p_hist_input()
+      })
+      
+      output$numbers <- renderPlot({
+        numbers_input()
+      })
+      
+      output$coverage <- renderPlot({
+        coverage_input()
+      })
+      # 
+      ## Enrichment Outputs
+      output$spinner_go <- renderUI({
+        req(input$go_analysis)
+        shinycssloaders::withSpinner(plotOutput(ns("go_enrichment")), color = "#3c8dbc")
+      })
+      
+      output$go_enrichment<-renderPlot({
+        Sys.sleep(2)
+        go_input()$plot_go
+      })
+      
+      output$spinner_pa <- renderUI({
+        req(input$pathway_analysis)
+        shinycssloaders::withSpinner(plotOutput(ns("pathway_enrichment")), color = "#3c8dbc")
+      })
+      
+      output$pathway_enrichment<-renderPlot({
+        Sys.sleep(2)
+        pathway_input()$plot_pa
+      })
+      
+      # generate downloadable data matrix
+      unimputed_table<-reactive({
+        temp<-assay(processed_data())
+        temp1<-2^(temp)
+        colnames(temp1)<-paste(colnames(temp1),"original_intensity",sep="_")
+        temp1<-cbind(ProteinID=rownames(temp1),temp1) 
+        #temp1$ProteinID<-rownames(temp1)
+        return(as.data.frame(temp1))
+      })
+      
+      imputed_table<-reactive({
+        temp<-assay(imputed_data())
+        temp1<-2^(temp)
+        colnames(temp1)<-paste(colnames(temp1),"imputed_intensity",sep="_")
+        temp1<-cbind(ProteinID=rownames(temp1),temp1) #temp1$ProteinID<-rownames(temp1)
+        return(as.data.frame(temp1))
+      })
+      
+      ##### Download Functions
+      datasetInput <- reactive({
+        switch(input$dataset,
+               "Results" = get_results_proteins(dep()),
+               "Original_matrix"= unimputed_table(),
+               # "significant_proteins" = get_results(dep()) %>%
+               #   filter(significant) %>%
+               #   select(-significant),
+               "Imputed_matrix" = imputed_table(),
+               "Full_dataset" = get_df_wide(dep()),
+               "RData")
+      })
+      
+      output$downloadData <- downloadHandler(
+        filename = function() { 
+          if(input$dataset != "RData"){
+            paste(input$dataset, ".csv", sep = "") 
+          } else {
+            "RData_output.RData"
+          }
+          }, 
+        
+        content = function(file) {
+          if (input$dataset != "RData"){
+            write.table(datasetInput(),
+                        file,
+                        col.names = TRUE,
+                        row.names = FALSE,
+                        sep =",")
+          } else {
+            var_list = c(p,lfc)
+            maxquant_data_input <- maxquant_data_input()
+            exp_design_input <- exp_design_input()
+            processed_data <- processed_data()
+            normalised_data <- normalised_data()
+            norm_type <- norm_type()
+            imputed_data <- imputed_data()
+            dep <- dep()
+            save(maxquant_data_input,exp_design_input,processed_data,normalised_data,norm_type,imputed_data,dep,var_list,file = file)
+          }
+          }
+      )
+      
+      individual_cluster <- reactive({
+        cluster_number <- input$cluster_number
+        cluster_all <-heatmap_cluster()[[2]]
+        single_cluster <- cluster_all[names(cluster_all)==cluster_number] %>% unlist()
+        # combine results table with sample intensity columns
+        data_result <- data_result() %>% dplyr::left_join(data.frame(assay(dep())) %>% tibble::rownames_to_column(), by = c("Gene Name" = "rowname"))
+        df <- data_result[single_cluster,]
+        return(df)
+      })
+      
+      output$downloadCluster <- downloadHandler(
+        filename = function() { paste("Cluster_info_",input$cluster_number, ".csv", sep = "") }, ## use = instead of <-
+        content = function(file) {
+          write.table(individual_cluster(),
+                      file,
+                      col.names = TRUE,
+                      row.names = FALSE,
+                      sep =",") }
+      )
+      
+      # output$downloadVolcano <- downloadHandler(
+      #   filename = function() {
+      #     paste0("Volcano_", input$volcano_cntrst, ".pdf")
+      #   },
+      #   content = function(file) {
+      #     pdf(file)
+      #     if(is.null(input$contents_rows_selected) & is.null(input$protein_brush)){
+      #       print(volcano_input())
+      #       dev.off()
+      #     }
+      #     else{
+      #       print(volcano_input_selected())
+      #       dev.off()
+      #     }
+      #   }
+      # )
+      
+      
+      ## Protein plot download
+      # output$downloadProtein <- downloadHandler(
+      #   filename = function() {
+      #     paste0(input$type,".pdf")
+      #   },
+      #   content = function(file) {
+      #     pdf(file, height = input$protein_h, width = input$protein_w)
+      #     print(protein_input())
+      #     dev.off()
+      #   }
+      # )
+      
+      saved_volcano <- reactive({
+        if(is.null(input$contents_rows_selected) & is.null(input$protein_brush)){
+          p <- volcano_input()
+        }
+        else{
+          p <- volcano_input_selected()
+        }
+        return(p)
+      })
+      
+      volcano_cntrst <- reactive({
+        input$volcano_cntrst
+      })
+      
+      type <- reactive({
+        input$type
+      })
+      
+      save_plot_server("heatmap", heatmap_input)
+      save_plot_server("volcano", saved_volcano, volcano_cntrst)
+      save_plot_server("protein_plot", protein_input,type)
+      
+      ###### ==== DOWNLOAD GO TABLE ==== ####
+      output$downloadGO <- downloadHandler(
+        filename = function() { paste("GO_enrichment_",input$go_database, ".csv", sep = "") }, ## use = instead of <-
+        content = function(file) {
+          write.table(go_input()$go_result,
+                      file,
+                      col.names = TRUE,
+                      row.names = FALSE,
+                      sep =",") }
+      )
+      
+      ###### ==== DOWNLOAD PATHWAY TABLE ==== ####
+      output$downloadPA <- downloadHandler(
+        filename = function() { paste("Pathway_enrichment_",input$pathway_database, ".csv", sep = "") }, 
+        ## use = instead of <-
+        content = function(file) {
+          write.table(pathway_input()$pa_result,
+                      file,
+                      col.names = TRUE,
+                      row.names = FALSE,
+                      sep =",") }
+      )
+      
+      # output$download_hm_svg<-downloadHandler(
+      #   filename = function() { "heatmap.svg" }, 
+      #   content = function(file) {
+      #     # heatmap_plot<-DEP::plot_heatmap(dep(),"centered", k=6, indicate = "condition")
+      #     svg(file, height = input$hm_h, width = input$hm_w)
+      #     print(heatmap_input())
+      #     dev.off()
+      #   }
+      # )
+      
+      #####===== Download Report =====#####
+      output$downloadReport <- downloadHandler(
+        # For PDF output, change this to "report.pdf"
+        filename = "LFQ-Analyst_report.html",
+        if (grepl("_dm$",id)){
+            content = function(file) {
+              file.copy("www/LFQ-Analyst_report.html",file)
+            }
+        } else {
+          content = function(file) {
+            # Copy the report file to a temporary directory before processing it, in
+            # case we don't have write permissions to the current working dir (which
+            # can happen when dep()loyed).
+            withProgress(message = "Report generation is in progress", 
+                         detail = "Please wait for a while", value = 0,{
+                           tempReport <- file.path(tempdir(), "LFQ_report.Rmd")
+                           file.copy("LFQ_report.Rmd", tempReport, overwrite = TRUE)
+                           
+                           sig_proteins<-dep() %>%
+                             .[SummarizedExperiment::rowData(.)$significant, ] %>%
+                             nrow()
+                           
+                           tested_contrasts<- gsub("_p.adj", "", 
+                                                   colnames(SummarizedExperiment::rowData(dep()))[grep("p.adj", 
+                                                                                                       colnames(SummarizedExperiment::rowData(dep())))])
+                           pg_width<- ncol(imputed_data()) / 2.5
+                           # Set up parameters to pass to Rmd document
+                           params <- list(data = processed_data(),
+                                          alpha = p,
+                                          lfc = lfc,
+                                          num_signif= sig_proteins,
+                                          pg_width = pg_width,
+                                          tested_contrasts= tested_contrasts,
+                                          numbers_input= numbers_input,
+                                          detect_input = detect_input,
+                                          imputation_input = imputation_input,
+                                          missval_input = missval_input,
+                                          p_hist_input = p_hist_input,
+                                          pca_input = pca_input,
+                                          coverage_input= coverage_input,
+                                          correlation_input =correlation_input,
+                                          heatmap_input = heatmap_input,
+                                          cvs_input= cvs_input,
+                                          dep = dep()
+                           )
+                           
+                           # Knit the document, passing in the `params` list
+                           rmarkdown::render(tempReport, output_file = file,
+                                             params = params,
+                                             envir = new.env(parent = globalenv())
+                           )
+                           })
+          }
+        }
+      )
+      
+      ###### ==== DOWNLOAD QC plots svg ==== ####
+      
+      output$download_pca_svg<-downloadHandler(
+        filename = function() { "PCA_plot.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(pca_input())
+          dev.off()
+        }
+      )
+      
+      output$download_corr_svg<-downloadHandler(
+        filename = function() { "Correlation_plot.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(correlation_input())
+          dev.off()
+        }
+      )
+      
+      output$download_cvs_svg<-downloadHandler(
+        filename = function() { "Sample_CV.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(cvs_input())
+          dev.off()
+        }
+      )
+      
+      output$download_num_svg<-downloadHandler(
+        filename = function() { "Proteins_plot.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(numbers_input())
+          dev.off()
+        }
+      )
+      
+      output$download_cov_svg<-downloadHandler(
+        filename = function() { "Coverage_plot.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(coverage_input())
+          dev.off()
+        }
+      )
+      
+      output$download_norm_svg<-downloadHandler(
+        filename = function() { "Normalization_plot.svg" }, 
+        content = function(file) {
+          svg(file,height = input$norm_h, width = input$norm_w)
+          print(norm_input())
+          dev.off()
+        }
+      )
+      
+      output$download_missval_svg<-downloadHandler(
+        filename = function() { "Missing_value_heatmap.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(missval_input())
+          dev.off()
+        }
+      )
+      
+      output$download_imp_svg<-downloadHandler(
+        filename = function() { "Imputation_plot.svg" }, 
+        content = function(file) {
+          svg(file)
+          print(imputation_input())
+          dev.off()
+        }
+      )
+      
+      output$download_scatter_svg<- downloadHandler(
+        filename = function() {"scatterplots.svg"},
+        content = function(file) {
+          svg(file)
+          print(scatterplot_input())
+          dev.off()
+        }
+      )
+      
+    }
+  )
+}

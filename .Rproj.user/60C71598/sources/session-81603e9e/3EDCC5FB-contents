@@ -1,0 +1,61 @@
+VERSION <- "v1.2-alpha"
+
+library("SummarizedExperiment")
+library("tidyverse")
+library("DEP")
+library("testthat")
+library("shiny")
+library("shinydashboard")
+library("shinyjs")
+library("shinyalert")
+library("ComplexHeatmap")
+library("limma")
+library("DT")
+library("ggrepel")
+library("httr")
+library("rjson")
+library("svglite")
+library("rhandsontable")
+library("shinyBS")
+source("R/functions.R")
+source("R/volcano_function.R")
+source("R/tests.R")
+source("R/demo_functions.R")
+source("R/enrichment_functions.R")
+library("shinyWidgets")
+library("ggVennDiagram")
+library("shinycssloaders") 
+library("shiny.info")
+library("scales")
+library("plotly")
+library("ggplot2")
+library("ggpubr")
+library("stats")
+library("UpSetR")
+library("forcats")
+library("GGally")
+library("shinyfullscreen")
+options(dplyr.summarise.inform = FALSE)
+options(DT.options = list(scrollX = TRUE,
+                          autoWidth=TRUE,
+                          columnDefs= list(list(targets = c(-1), width = '400px'),
+                                           list(targets = c(1,2),
+                                                render = JS(
+                                                  "function(data, type, row, meta) {",
+                                                  "return type === 'display' && data.length > 15 ?",
+                                                  "'<span title=\"' + data + '\">' + data.substr(0, 15) + '...</span>' : data;",
+                                                  "}")),
+                                           list(targets = c(-1),
+                                                render = JS(
+                                                  "function(data, type, row, meta) {",
+                                                  "return type === 'display' && data.length > 60 ?",
+                                                  "'<span title=\"' + data + '\">' + data.substr(0, 60) + '...</span>' : data;",
+                                                  "}"))
+                          )
+))
+
+source("R/quantified_module.R")
+source("R/attendance_module.R")
+source("R/plotly_functions.R")
+source("R/utilities_for_geom_pwc.R")
+# source("R/save_plot_module.R")

@@ -1,0 +1,523 @@
+#Define server logic to read selected file ----
+server <- function(input, output, session) {
+  options(shiny.maxRequestSize=100*1024^2)## Set maximum upload size to 100MB
+  
+  # check if miss input files
+  start_analysis <- eventReactive(input$analyze,{ 
+    if(input$analyze==0 ){
+      return(FALSE)
+    } else {
+      if (is.null(dia_data_input()) | is.null(exp_design_input())) {
+        shinyalert("Input file missing!", "Please check your input files", type="warning",
+                   closeOnClickOutside = TRUE,
+                   closeOnEsc = TRUE,
+                   timer = 5000)
+        return(FALSE)
+      } else if (any(!isUnique(paste0(exp_design_input()$condition, exp_design_input()$replicate)))){
+        shinyalert("Incorrect input file!", "The replicate number cannot duplicate under same condition, please check your input files", type="warning",
+                   closeOnClickOutside = TRUE,
+                   closeOnEsc = TRUE,
+                   timer = 5000)
+        return(FALSE)
+      }
+    }
+    return(TRUE)
+  })
+  
+  reload_analysis <- eventReactive(input$reload,{ 
+    if(input$reload==0 ){
+      return(FALSE)
+    } else {
+      if (is.null(input$rdataFile)) {
+        shinyalert("Input file missing!", "Please upload RData file", type="warning",
+                   closeOnClickOutside = TRUE,
+                   closeOnEsc = TRUE,
+                   timer = 5000)
+        return(FALSE)
+      } 
+    }
+    return(TRUE)
+  })
+  
+  # Hide DIA page if only have one replicate in each sample
+  observeEvent(start_analysis(),{
+    if (start_analysis() == FALSE){
+      return(NULL)
+    }
+    exp <- exp_design_input()
+    if (max(exp$replicate)==1){
+      hideTab(inputId = "tab_panels", target = "dia_panel")
+    } else {
+      showTab(inputId = "tab_panels", target = "dia_panel")
+      updateTabsetPanel(session, "tab_panels", selected = "dia_panel")
+    }
+  })
+  
+  
+  #  Show elements on clicking Start analysis button
+  observeEvent(input$analyze,{ 
+    if(input$analyze==0 | start_analysis() == FALSE){
+      return()
+    } else {
+      shinyjs::hide("quickstart_info")
+      shinyjs::show("panel_list")
+      shinyalert("In Progress!", "Data analysis has started, wait until table and plots
+                appear on the screen", type="info",
+                 closeOnClickOutside = TRUE,
+                 closeOnEsc = TRUE,
+                 timer = 10000) # timer in miliseconds (10 sec)
+    }
+    # shinyjs::addClass(selector = "body", class = "sidebar-collapse")
+  })
+  
+  observe({
+    if (input$tabs_selected=="demo"){
+      shinyalert("Demo results loading!...", "Wait until table and plots
+                appear on the screen", type="info",
+                 closeOnClickOutside = TRUE,
+                 closeOnEsc = TRUE,
+                 timer = 6000)
+      # shinyjs::addClass(selector = "body", class = "sidebar-collapse")
+    }
+  })
+  
+  # Show elements on clicking Reload analysis button
+  observeEvent(input$reload ,{
+    if(input$reload==0 | reload_analysis() == FALSE){
+      return(NULL)
+    } 
+    shinyjs::hide("reanalysis_info")
+    shinyjs::show("re_analysis_panel")
+    shinyalert("In Progress!", "Data analysis has started, wait until table and plots
+                appear on the screen", type="info",
+               closeOnClickOutside = TRUE,
+               closeOnEsc = TRUE,
+               timer = 6000)
+    # shinyjs::addClass(selector = "body", class = "sidebar-collapse")
+  })
+  
+  # disable imputation type options if only take valid values
+  observeEvent(input$valid_values, {
+    if(input$valid_values == FALSE){
+      shinyjs::enable("imputation")
+    } else {
+      shinyjs::disable("imputation")
+    }
+  })
+  
+  ## make reactive elements
+  dia_data_input<-reactive({NULL})
+  exp_design_input<-reactive({NULL})
+  
+  # enable the template button if uploaded a protein file
+  observeEvent(input$file1$datapath, {
+    if(!is.null(input$file1$datapath)){
+      shinyjs::enable("showTable")
+    }
+  })
+  
+  dia_data_input<-eventReactive(input$analyze,{
+    inFile<-input$file1
+    if(is.null(inFile))
+      return(NULL)
+    temp_data<-read.table(inFile$datapath,
+                          header = TRUE,
+                          fill= TRUE, # to fill any missing data
+                          sep = "\t", 
+                          quote = "",
+                          stringsAsFactors = FALSE
+    )
+    # TODO:
+    # if (grepl(".tsv",inFile$name)){
+    #   # validate(diann_input_test(temp_data))
+    # } else {
+    #   # validate(spec_input_test(temp_data))
+    # }
+
+    return(temp_data)
+  })
+  
+  # Creates handsontable template table
+  exp_data1 <- reactive({
+    req(input$file1)
+    if (!is.null(input$file2)){
+      tempTable <- read_exp_func(input$file2) 
+      # change it to lower case
+      colnames(tempTable) <- tolower(colnames(tempTable))
+    } else {
+      df <-  read.table(input$file1$datapath,
+                        header = TRUE,
+                        fill= TRUE, # to fill any missing data
+                        sep = "\t", 
+                        quote = "",
+                        stringsAsFactors = FALSE  )
+      tempTable =  get_dia_exp_design(df)
+    }
+    tempTable$condition<-trimws(tempTable$condition, which = "both")  # remove both leading and trailing whitespace
+    tempTable$label <- ifelse(grepl("^[[:digit:]]", tempTable$label), paste("X",tempTable$label,sep = ''), tempTable$label)
+    tempTable$condition <- ifelse(grepl("^[[:digit:]]", tempTable$condition), paste("X",tempTable$condition,sep = ''), tempTable$condition)
+    tempTable$condition <- tempTable$condition %>% gsub("[^[:alnum:]|_]+", "_",.) # auto fix special characters
+    rhandsontable(tempTable) %>%
+      hot_col("label", readOnly = T)  %>% 
+      hot_cols(columnSorting = T)
+  })
+  
+  # Outputs the template table
+  output$exp_protein<- renderRHandsontable({exp_data1()})
+  
+  # Changes the handsontable back into a dataframe 
+  exp_data2<-reactive({NULL})
+  exp_data2 <- eventReactive(input$save_exp, {
+    hot_to_r(input$exp_protein)
+  })
+  
+  observeEvent(input$save_exp, {
+    output$save_message <- renderText({
+      if (sum(is.na(exp_data2())) != 0) {
+        stop(safeError("Warning: Cells can not be empty"))
+      }
+      else {
+        "Experiment design table saved"
+      }
+    })
+  })
+  
+  # download edited exp_design table
+  output$download_exp <- downloadHandler("DIA-Analyst_experimental_design.txt",
+                                         content = function(file){
+                                           write.table(exp_data2(), file, 
+                                                       sep = "\t", 
+                                                       row.names = F,
+                                                       quote = F)
+                                         },
+                                         contentType = "text/csv")
+  
+  # rewrite exp_design table
+  observeEvent(input$showTable ,{
+    if(input$showTable==0){
+      return()
+    }
+    shinyjs::show("quickstart_info")
+    shinyjs::hide("panel_list")
+    output$save_message <- renderText({
+      ""
+    })
+  })
+  
+  observeEvent(input$original_exp,{
+    output$exp_protein<- renderRHandsontable({exp_data1()})
+    output$save_message <- renderText({""})
+  })
+  
+  # experiment design file
+  exp_design_input<-eventReactive(input$analyze,{
+    inFile<-input$file2
+    if (is.null(inFile) & input$save_exp==0) {
+      return(NULL)
+    } else if (input$save_exp>0){
+      if (any(is.na(exp_data2()))){
+        return(NULL)
+      } else {
+        temp_df <- exp_data2()
+      }
+    } else {
+      # handle different format inputs
+      temp_df <- read_exp_func(inFile)
+      # change it to lower case
+      colnames(temp_df) <- tolower(colnames(temp_df))
+      exp_design_test(temp_df)
+      temp_df$label<-as.character(temp_df$label)
+      temp_df$condition<-trimws(temp_df$condition, which = "both") # remove white space from left
+      temp_df$label <- ifelse(grepl("^[[:digit:]]", temp_df$label), paste("X",temp_df$label,sep = ''), temp_df$label)
+      temp_df$condition <- ifelse(grepl("^[[:digit:]]", temp_df$condition), paste("X",temp_df$condition,sep = ''), temp_df$condition)
+      temp_df$condition <- temp_df$condition %>% gsub("[^[:alnum:]|_]+", "_",.) # auto fix special characters
+    }
+    return(temp_df)
+  })
+  
+  # create selection of limma factors
+  factor_list <- reactive({
+    if(!is.null(is.null(input$file2))){
+      temp_df<-read.delim(input$file2$datapath,
+                          header = TRUE,
+                          sep="\t",
+                          stringsAsFactors = FALSE,
+                          colClasses = c(label = "character",condition = "character"))
+      # change column names to lowercase
+      colnames(temp_df) <- tolower(colnames(temp_df))
+      factor_list <- colnames(temp_df)[!colnames(temp_df) %in% c("label","condition")]
+      # name "replicate" to "replicate(paired test)"
+      names(factor_list) <- factor_list
+      names(factor_list)[names(factor_list) == "replicate"] = "replicate (Paired test)"
+    }
+    print(factor_list)
+    return(factor_list)
+  })
+  
+  # update list in multifactor
+  observe({
+    req(input$file2)
+    if(!is.null(factor_list())){
+      updateSelectInput(session, 
+                        "multifactor",
+                        "Multifactor analysis",
+                        selected = NULL,
+                        choices = factor_list()
+      )}
+  })
+  
+  limma_formula <- eventReactive(input$analyze,{
+    if(!is.null(input$multifactor)){
+      formula(paste0("~ 0 + condition + ", paste(input$multifactor, collapse= "+ ")))
+    } else {
+      formula(~ 0 + condition)
+    }
+  })
+  
+  multifactor <- eventReactive(input$analyze,{
+    if(!is.null(input$multifactor)){
+      input$multifactor
+    } else{
+      NULL
+    }
+  })
+  
+  ### Reactive components
+  processed_data<- reactive({
+    ## check which dataset
+    if(!is.null (dia_data_input() )){
+      dia_data <- reactive({dia_data_input()})
+    }
+    
+    if(!is.null (exp_design_input() )){
+      exp_design<-reactive({exp_design_input()})
+    }
+    
+    message(exp_design())
+    
+    #check dia columns
+    if (any(grep("PG.Quantity", colnames(dia_data())))){ # output from spectronaut
+      # filtered out reverse proteins
+      if (any(grepl("^REV__|^REFSEQ",dia_data()$PG.ProteinAccessions))){
+        filtered_data <- dia_data() %>% dplyr::filter(!grepl("^REV__|^REFSEQ", PG.ProteinAccessions))
+      } else {
+        filtered_data <- dia_data()
+      }
+      # switch button to remove or not remove contaminants
+      if (any(grepl("^CON__|^Cont_",dia_data()$PG.ProteinAccessions))){
+        if (input$contaminants == "FALSE"){ # filter out contaminants by default
+          filtered_data <- dia_data() %>% dplyr::filter(!grepl("^CON__|^Cont_", PG.ProteinAccessions))
+        } else {
+          filtered_data<-filtered_data 
+        }
+      } 
+      
+      data_unique<- DEP::make_unique(filtered_data,"PG.Genes",
+                                     "PG.ProteinAccessions",delim=";") #TODO: if doesn't have PG.ProteinAccessions column
+      intensity_columns<-grep("PG.Quantity", colnames(data_unique))
+    } else { # output from DIA-NN
+      filtered_data <- dia_data()
+      data_unique<- DEP::make_unique(filtered_data,"Genes",
+                                     "Protein.Group",delim=";")
+      
+      intensity_columns<- which(!(colnames(data_unique) %in% 
+                                    c("Protein.Group", "Protein.Ids", "Protein.Names", "Genes", "First.Protein.Description", "name","ID")))
+    }
+    
+    # if included, replace "Filtered" with NA (some spectronaut's output)
+    data_unique <- replace(data_unique, data_unique == "Filtered", NA) 
+    # ensure all intensity columns are numeric type
+    # data_unique[,intensity_columns] <- sapply(data_unique[,intensity_columns],as.numeric)
+    data_unique[,intensity_columns] <- sapply(data_unique[,intensity_columns],function(x) as.numeric(gsub(",", "",x)))
+    # replace NA to 0
+    data_unique <- data_unique %>% dplyr::mutate_if(is.numeric, ~tidyr::replace_na(.,0))
+    
+    # convert to SE object
+    data_se<-make_se_dia(data_unique,intensity_columns,exp_design())
+    
+    # Check number of replicates
+    # if(max(exp_design()$replicate)<3){
+    #   threshold<-0
+    # } else  if(max(exp_design()$replicate)==3){
+    #   threshold<-1
+    # } else if(max(exp_design()$replicate)<6 ){
+    #   threshold<-2
+    # } else if (max(exp_design()$replicate)>=6){
+    #   threshold<-trunc(max(exp_design()$replicate)/2)
+    # }
+    # 
+    # filter_missval(data_se,thr = threshold)
+    
+    if(input$valid_values == FALSE){
+      # filter missing values per condition
+      exp_df <- exp_design() %>% dplyr::count(condition)
+      exp_df <- exp_df %>% dplyr::mutate(thr = lapply(exp_df$n, threshold_detect)) # function:threshold_detect
+      condition_list <- exp_df$condition
+      
+      data_filtered <- filter_missval_new(data_se,condition_list,exp_df)
+    } else {
+      # only keep proteins without any missing values
+      data_filtered <- DEP::filter_proteins(data_se, "complete")
+    }
+    return(data_filtered)
+  })
+  
+  # unimputed_table<-reactive({
+  #   temp<-assay(processed_data())
+  #   temp1<-2^(temp)
+  #   colnames(temp1)<-paste(colnames(temp1),"original_intensity",sep="_")
+  #   temp1<-cbind(ProteinID=rownames(temp1),temp1) 
+  #   #temp1$ProteinID<-rownames(temp1)
+  #   return(as.data.frame(temp1))
+  # })
+  
+  normalised_data<-reactive({
+    normalize_vsn(processed_data())
+  })
+  
+  # imputed_data<-reactive({
+  #   DEP::impute(processed_data(),input$imputation)
+  # })
+  
+  imputed_data<-reactive({
+    if (input$imputation == "no_imputation" | is.null(input$imputation)){
+      processed_data()
+    } else {
+      DEP::impute(processed_data(),input$imputation)
+    }
+  })
+  
+  # imputed_table<-reactive({
+  #   temp<-assay(imputed_data())
+  #   temp1<-2^(temp)
+  #   colnames(temp1)<-paste(colnames(temp1),"imputed_intensity",sep="_")
+  #   temp1<-cbind(ProteinID=rownames(temp1),temp1) #temp1$ProteinID<-rownames(temp1)
+  #   return(as.data.frame(temp1))
+  # })
+  
+  diff_all<-reactive({
+    test_diff(imputed_data(),type = 'all')
+  })
+  
+  dep<-reactive({
+    if(input$fdr_correction=="BH"){
+      # diff_all<-test_limma(imputed_data(),type='all')
+      diff_all<-test_limma(imputed_data(),type='all', design_formula = limma_formula())
+      dep <- add_rejections(diff_all,alpha = input$p, lfc= input$lfc)
+      print(limma_formula())
+      
+    }
+    else{
+      # diff_all<-test_diff(imputed_data(),type='all')
+      diff_all<-test_diff(imputed_data(),type='all',design_formula = limma_formula())
+      dep <- add_rejections(diff_all,alpha = input$p, lfc= input$lfc)
+    }
+    dep <- dep[!is.na(rowData(dep)$significant),]
+    return(dep)
+  })
+  
+  
+  #### Demo logic ========== ############
+  
+  env_dm<-reactive({
+    LoadToEnvironment("data/DIA_demo.RData", env = globalenv())
+  })
+  
+  # Get input raw data
+  dia_data_input_dm <- reactive({
+    env_dm()[["dia_data_input"]]
+  })
+  
+  exp_design_dm <- reactive({
+    env_dm()[["exp_design_input"]]
+  })
+  
+  ## Get processed data
+  
+  processed_data_dm<-reactive({
+    env_dm()[["processed_data"]]
+  })
+  
+  normalised_data_dm<-reactive({
+    DEP::normalize_vsn(processed_data_dm())
+  })
+  
+  imputed_data_dm<-reactive({
+    DEP::impute(processed_data_dm())
+  })
+  
+  diff_all_dm<-reactive({
+    test_diff(imputed_data_dm(),type = 'all')
+  })
+  
+  dep_dm<-reactive({
+    env_dm()[["dep"]]
+  })
+  
+  #### Re_Analysis logic ========== ############
+  env_re <- eventReactive(input$reload, {
+    inputFile <- input$rdataFile
+    if (input$reload == 0 | is.null(inputFile)){
+      return(NULL)
+    }
+    path <- inputFile$datapath
+    LoadToEnvironment(path, env = globalenv())
+  })
+  
+  # Get input raw data
+  dia_data_input_re <-reactive({
+    env_re()[["dia_data_input"]]
+  })
+  
+  
+  exp_design_re <- reactive({
+    env_re()[["exp_design_input"]]
+  })
+  
+  
+  ## Get processed data
+  processed_data_re<-reactive({
+    env_re()[["processed_data"]]
+  })
+  normalised_data_re<-reactive({
+    DEP::normalize_vsn(processed_data_re())
+  })
+  
+  
+  imputed_data_re<-reactive({
+    # DEP::impute(processed_data_re(),input$imputation)
+    if("imputed_data" %in% names(env_re())){
+      env_re()[["imputed_data"]]
+    } else {
+      DEP::impute(processed_data_re(),input$imputation) # handle old RData file
+    }
+  })
+  
+  
+  diff_all_re<-reactive({
+    test_diff(imputed_data_re(),type = 'all')
+  })
+  
+  dep_re<-reactive({
+    env_re()[["dep"]]
+  })
+  
+  val_re <- reactive({
+    env_re()[["var_list"]]
+  })
+  
+  
+  # call modules
+  
+  dia_server(id = "dia_tab" ,processed_data, normalised_data,imputed_data,diff_all, dep,input$p, input$lfc, dia_data_input,exp_design_input)
+  attendance_server(id = "attendance_tab", dia_data_input,exp_design_input)
+  
+  dia_server(id = "dia_tab_dm" ,processed_data_dm, normalised_data_dm,imputed_data_dm,diff_all_dm ,dep_dm,0.05, 1, dia_data_input_dm,exp_design_dm)
+  attendance_server(id = "attendance_tab_dm",dia_data_input_dm,exp_design_dm)
+  
+  dia_server(id = "dia_tab_re" ,processed_data_re, normalised_data_re,imputed_data_re,diff_all_re, dep_re,val_re()[1], val_re()[2],dia_data_input_re,exp_design_re)
+  attendance_server(id = "attendance_tab_re", dia_data_input_re,exp_design_re)
+  
+  
+  
+}

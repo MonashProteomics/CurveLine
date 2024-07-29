@@ -1,0 +1,632 @@
+#Define server logic to read selected file ----
+server <- function(input, output, session) {
+  options(shiny.maxRequestSize=100*1024^2)## Set maximum upload size to 100MB
+
+   # check if miss input files
+   start_analysis <- eventReactive(input$analyze,{ 
+     if(input$analyze==0 ){
+       return(FALSE)
+     } else {
+       if (is.null(input$file1) | is.null(exp_design_input())) {
+         shinyalert("Input file missing!", "Please check your input files", type="warning",
+                    closeOnClickOutside = TRUE,
+                    closeOnEsc = TRUE,
+                    timer = 5000)
+         return(FALSE)
+       } else if (any(!isUnique(paste0(exp_design_input()$condition, exp_design_input()$replicate)))){
+         shinyalert("Incorrect input file!", "The replicate number cannot duplicate under same condition, please check your input files", type="warning",
+                    closeOnClickOutside = TRUE,
+                    closeOnEsc = TRUE,
+                    timer = 5000)
+         return(FALSE)
+       }
+     }
+     return(TRUE)
+   })
+   
+   reload_analysis <- eventReactive(input$reload,{ 
+     if(input$reload==0 ){
+       return(FALSE)
+     } else {
+       if (is.null(input$rdataFile)) {
+         shinyalert("Input file missing!", "Please upload RData file", type="warning",
+                    closeOnClickOutside = TRUE,
+                    closeOnEsc = TRUE,
+                    timer = 5000)
+         return(FALSE)
+       } 
+     }
+     return(TRUE)
+   })
+   
+   # Hide LFQ page if only have one replicate in each sample
+   observeEvent(start_analysis(),{
+     if (start_analysis() == FALSE){
+       return(NULL)
+     }
+     exp <- exp_design_input()
+     if (max(exp$replicate)==1){
+       hideTab(inputId = "tab_panels", target = "lfq_panel")
+     } else {
+       showTab(inputId = "tab_panels", target = "lfq_panel")
+       updateTabsetPanel(session, "tab_panels", selected = "lfq_panel")
+     }
+   })
+   
+   
+   #  Show elements on clicking Start analysis button
+   observeEvent(input$analyze,{ 
+     if(input$analyze==0 | start_analysis() == FALSE){
+       return()
+     } else {
+       shinyjs::hide("quickstart_info")
+       shinyjs::show("panel_list")
+       shinyalert("In Progress!", "Data analysis has started, wait until table and plots
+                appear on the screen", type="info",
+                  closeOnClickOutside = TRUE,
+                  closeOnEsc = TRUE,
+                  timer = 10000) # timer in miliseconds (10 sec)
+     }
+     # shinyjs::addClass(selector = "body", class = "sidebar-collapse")
+   })
+   
+   observe({
+   if (input$tabs_selected=="demo"){
+     shinyalert("Demo results loading!...", "Wait until table and plots
+                appear on the screen", type="info",
+                closeOnClickOutside = TRUE,
+                closeOnEsc = TRUE,
+                timer = 6000)
+     # shinyjs::addClass(selector = "body", class = "sidebar-collapse")
+   }
+   })
+   
+   # Show elements on clicking Reload analysis button
+   observeEvent(input$reload ,{
+     if(input$reload==0 | reload_analysis() == FALSE){
+       return(NULL)
+     } 
+     shinyjs::hide("reanalysis_info")
+     shinyjs::show("re_analysis_panel")
+     shinyalert("In Progress!", "Data analysis has started, wait until table and plots
+                appear on the screen", type="info",
+                closeOnClickOutside = TRUE,
+                closeOnEsc = TRUE,
+                timer = 6000)
+     # shinyjs::addClass(selector = "body", class = "sidebar-collapse")
+   })
+   
+   # disable imputation type options if only take valid values
+   observeEvent(input$valid_values, {
+     if(input$valid_values == FALSE){
+       shinyjs::enable("imputation")
+     } else {
+       shinyjs::disable("imputation")
+     }
+   })
+    
+    ## make reactive elements
+    maxquant_data_input<-reactive({NULL})
+    exp_design_input<-reactive({NULL})
+    # exp_design_example<-reactive({NULL})
+    # maxquant_data_example<-reactive({NULL})
+    
+    # enable the template button if uploaded a protein file
+    observeEvent(input$file1$datapath, {
+      if(!is.null(input$file1$datapath)){
+        shinyjs::enable("showTable")
+      }
+    })
+    
+    maxquant_data_input<-eventReactive(input$analyze,{
+      inFile<-input$file1
+      if(is.null(inFile))
+        return(NULL)
+      temp_data<-read.delim(inFile$datapath,
+                 header = TRUE,
+                 fill= TRUE, # to fill any missing data
+                 sep = "\t"
+      )
+      # change inconsistency column names
+      colnames(temp_data)[names(temp_data) == "Description"] <- "Protein.names"
+      colnames(temp_data)[names(temp_data) == "Gene" | names(temp_data) == "Gene.Names" ] <- "Gene.names"
+      colnames(temp_data)[names(temp_data) == "Protein.ID"] <- "Protein.IDs"
+      colnames(temp_data)[names(temp_data) == "Combined.Total.Peptides"] <- "Unique.Stripped.Peptides" # fragpipe different outputs
+      # TODO: confirm whether create a blank gene column
+      if (!"Gene.names" %in% colnames(temp_data)){
+        temp_data$Gene.names <- ""
+      }
+      if (!"Protein.names" %in% colnames(temp_data)){
+        temp_data$Protein.names <- ""
+      }
+      if (grepl(".tsv",inFile$name)){
+        validate(fragpipe_input_test(temp_data))
+      } else {
+        validate(maxquant_input_test(temp_data))
+      }
+      return(temp_data)
+    })
+    
+    # Creates handsontable template table
+    exp_data1 <- reactive({
+      req(input$file1)
+      if (!is.null(input$file2)){
+        tempTable <- read.delim(input$file2$datapath,
+                                header = TRUE,
+                                sep="\t",
+                                stringsAsFactors = FALSE,
+                                colClasses = c(label = "character",condition = "character"))
+      } else {
+        df <- read.delim(input$file1$datapath,
+                         header = TRUE,
+                         fill= TRUE, # to fill any missing data
+                         sep = "\t")
+        tempTable =  get_exp_design(df)
+      }
+      tempTable$label<-as.character(tempTable$label)
+      tempTable$condition<-trimws(tempTable$condition, which = "both")  # remove both leading and trailing whitespace
+      tempTable$label <- ifelse(grepl("^[[:digit:]]", tempTable$label), paste("X",tempTable$label,sep = ''), tempTable$label)
+      tempTable$condition <- ifelse(grepl("^[[:digit:]]", tempTable$condition), paste("X",tempTable$condition,sep = ''), tempTable$condition)
+      tempTable$condition <- tempTable$condition %>% gsub("[^[:alnum:]|_]+", "_",.) # auto fix special characters
+      
+      rhandsontable(tempTable) %>%
+        hot_col("label", readOnly = T) %>% 
+        hot_cols(columnSorting = T)
+    })
+    
+    # Outputs the template table
+    output$exp_protein<- renderRHandsontable({exp_data1()})
+    
+    # Changes the handsontable back into a dataframe 
+    exp_data2<-reactive({NULL})
+    exp_data2 <- eventReactive(input$save_exp, {
+      hot_to_r(input$exp_protein)
+    })
+    
+    observeEvent(input$save_exp, {
+      output$save_message <- renderText({
+        if (sum(is.na(exp_data2())) != 0) {
+          stop(safeError("Warning: Cells can not be empty"))
+        }
+        else {
+          "Experiment design table saved"
+        }
+      })
+    })
+    
+    # download edited exp_design table
+    output$download_exp <- downloadHandler("LFQ-Analyst_experimental_design.txt",
+                                           content = function(file){
+                                             write.table(exp_data2(), file, 
+                                                         sep = "\t", 
+                                                         row.names = F,
+                                                         quote = F)
+                                           },
+                                           contentType = "text/csv")
+    
+    # rewrite exp_design table
+    observeEvent(input$showTable ,{
+      if(input$showTable==0){
+        return()
+      }
+      shinyjs::show("quickstart_info")
+      shinyjs::hide("panel_list")
+      output$save_message <- renderText({
+        ""
+      })
+    })
+
+    observeEvent(input$original_exp,{
+      output$exp_protein<- renderRHandsontable({exp_data1()})
+      output$save_message <- renderText({""})
+      })
+    
+    # experiment design file
+    exp_design_input<-eventReactive(input$analyze,{
+      inFile<-input$file2
+      if (is.null(inFile) & input$save_exp==0) {
+        return(NULL)
+      } else if (input$save_exp>0){
+        if (any(is.na(exp_data2()))){
+          return(NULL)
+        } else {
+          temp_df <- exp_data2()
+        }
+      } else {
+        temp_df<-read.delim(inFile$datapath,
+                            header = TRUE,
+                            sep="\t",
+                            stringsAsFactors = FALSE,
+                            colClasses = c(label = "character",condition = "character"))
+        exp_design_test(temp_df)
+        temp_df$label<-as.character(temp_df$label)
+        temp_df$condition<-trimws(temp_df$condition, which = "both")  # remove both leading and trailing whitespace
+        temp_df$label <- ifelse(grepl("^[[:digit:]]", temp_df$label), paste("X",temp_df$label,sep = ''), temp_df$label)
+        temp_df$condition <- ifelse(grepl("^[[:digit:]]", temp_df$condition), paste("X",temp_df$condition,sep = ''), temp_df$condition)
+        temp_df$condition <- temp_df$condition %>% gsub("[^[:alnum:]|_]+", "_",.) # auto fix special characters
+      }
+      return(temp_df)
+    })
+    
+    # create selection of limma factors
+    factor_list <- reactive({
+      if(!is.null(is.null(input$file2))){
+        temp_df<-read.delim(input$file2$datapath,
+                            header = TRUE,
+                            sep="\t",
+                            stringsAsFactors = FALSE,
+                            colClasses = c(label = "character",condition = "character"))
+        # change column names to lowercase
+        colnames(temp_df) <- tolower(colnames(temp_df))
+        factor_list <- colnames(temp_df)[!colnames(temp_df) %in% c("label","condition")]
+        # name "replicate" to "replicate(paired test)"
+        names(factor_list) <- factor_list
+        names(factor_list)[names(factor_list) == "replicate"] = "replicate (Paired test)"
+      }
+      print(factor_list)
+      return(factor_list)
+    })
+    
+    # update list in multifactor
+    observe({
+      req(input$file2)
+      if(!is.null(factor_list())){
+        updateSelectInput(session, 
+                          "multifactor",
+                          "Multifactor analysis",
+                          selected = NULL,
+                          choices = factor_list()
+        )}
+    })
+    
+    limma_formula <- eventReactive(input$analyze,{
+      if(!is.null(input$multifactor)){
+        formula(paste0("~ 0 + condition + ", paste(input$multifactor, collapse= "+ ")))
+      } else {
+        formula(~ 0 + condition)
+      }
+    })
+    
+    multifactor <- eventReactive(input$analyze,{
+      if(!is.null(input$multifactor)){
+        input$multifactor
+      } else{
+        NULL
+      }
+    })
+   
+### Reactive components
+   processed_data<- reactive({
+     ## check which dataset
+     if(!is.null (maxquant_data_input() )){
+       maxquant_data <- reactive({maxquant_data_input()})
+     }
+     
+     if(!is.null (exp_design_input() )){
+       exp_design<-reactive({exp_design_input()})
+     }
+     
+     message(exp_design())
+     
+     #check maxquant columns    
+     if(length(grep("^LFQ.", colnames(maxquant_data()))) !=0){
+       if(any(grepl('+',maxquant_data()$Reverse))){
+         filtered_data<-dplyr::filter(maxquant_data(),Reverse!="+")
+       }
+       else{filtered_data<-maxquant_data()}
+       if(any(grepl('+',filtered_data$Potential.contaminant))){
+         ## switch button to remove or not remove contaminants
+         if (input$contaminants == "FALSE"){ # filter out contaminants
+           filtered_data<-dplyr::filter(filtered_data,Potential.contaminant!="+")
+         } else {
+           filtered_data<-filtered_data 
+         }
+         # filtered_data<-dplyr::filter(filtered_data,Potential.contaminant!="+")
+       }
+       if(any(grepl('+',filtered_data$Only.identified.by.site))){
+         filtered_data<-dplyr::filter(filtered_data,Only.identified.by.site!="+") 
+       }
+       if(input$single_peptide==TRUE){
+         filtered_data <-filtered_data
+       }
+       else{filtered_data<-dplyr::filter(filtered_data,as.numeric(Razor...unique.peptides)>=2)}
+       
+       filtered_data<-ids_test(filtered_data)
+       
+       data_unique<- DEP::make_unique(filtered_data,"Gene.names","Protein.IDs",delim=";")
+       lfq_columns<-grep("^LFQ.", colnames(data_unique))
+       intensity_names <- colnames( data_unique[,lfq_columns]) %>% gsub("LFQ.intensity.", "", .)
+     }
+     else{
+       # remove reverse sequences if have
+       filtered_data <- dplyr::filter(maxquant_data(),!grepl("^rev_",Protein))
+       
+       # remove contaminants by default
+       if (input$contaminants == "FALSE"){ # filter out contaminants
+         filtered_data <- dplyr::filter(filtered_data,!grepl("^contam_",Protein))
+       } else {
+         filtered_data<-filtered_data 
+       }
+       if(input$single_peptide==TRUE){
+         filtered_data <-filtered_data
+       } else {
+         filtered_data <-dplyr::filter(filtered_data,as.numeric(Unique.Stripped.Peptides)>=2)
+       }
+       
+       filtered_data<-ids_test(filtered_data)
+       
+       data_unique<- DEP::make_unique(filtered_data,"Gene.names","Protein.IDs",delim=";")
+       
+       # Compatible for Fragpipe datasets without "MaxLFQ" columns
+       if(length(grep(".MaxLFQ.Intensity", colnames(data_unique))) !=0){
+         lfq_columns<-grep(".MaxLFQ.Intensity", colnames(data_unique))
+         intensity_names <- colnames( data_unique[,lfq_columns]) %>% gsub(".MaxLFQ.Intensity", "", .)
+       } 
+       else {
+         # lfq_columns<-grep(".Total.Intensity", colnames(data_unique))
+         # intensity_names <- colnames( data_unique[,lfq_columns]) %>% gsub(".Total.Intensity", "", .)
+         all_intentisy_cols <- grep(".Intensity", colnames(data_unique))
+         remove_cols <- grep("Unique.Intensity|Total.Intensity",colnames(data_unique))
+         lfq_columns <- setdiff(all_intentisy_cols, remove_cols)
+         intensity_names <- colnames( data_unique[,lfq_columns]) %>%
+           gsub(".Intensity", "", .)  %>% 
+           gsub(".MaxLFQ", "", .) %>% 
+           gsub(".Razor", "",.) 
+       }
+       
+       # rename intensity column names
+       names(data_unique)[lfq_columns] <- c(intensity_names)
+     }
+     
+     ### remove columns of samples not in experiment design table
+     # remove_columns <- intensity_names[make.names(delete_prefix(intensity_names)) %in% make.names(delete_prefix(exp_design()$label)) ==FALSE]
+     if (any(make.names(intensity_names) %in% make.names(exp_design()$label))){
+       remove_columns <- intensity_names[make.names(intensity_names )%in% make.names(exp_design()$label) ==FALSE]
+     } else {
+       remove_columns <- intensity_names[make.names(delete_prefix(intensity_names) )%in% make.names(delete_prefix(exp_design()$label)) ==FALSE]
+     }
+     
+     if (identical(remove_columns, character(0)) == FALSE){
+       lfq_columns <- lfq_columns[-c(which(intensity_names %in% remove_columns))]
+     } else {
+       lfq_columns <- lfq_columns
+     }
+     
+     # ensure all intensity columns are numeric type
+     data_unique[,lfq_columns] <- sapply(data_unique[,lfq_columns],as.numeric)
+     ## Check for matching columns in maxquant and experiment design file
+     test_match_lfq_column_design(data_unique,lfq_columns, exp_design())
+     data_se<-DEP:::make_se(data_unique,lfq_columns,exp_design())
+  
+     # Check number of replicates
+     # if(max(exp_design()$replicate)<3){
+     #   threshold<-0
+     # } else  if(max(exp_design()$replicate)==3){
+     #   threshold<-1
+     # } else if(max(exp_design()$replicate)<6 ){
+     #   threshold<-2
+     # } else if (max(exp_design()$replicate)>=6){
+     #   threshold<-trunc(max(exp_design()$replicate)/2)
+     # }
+     # 
+     if(input$valid_values == FALSE){
+       # filter_missval(data_se,thr = threshold)
+       exp_df <- exp_design() %>% dplyr::count(condition)
+       exp_df <- exp_df %>% dplyr::mutate(thr = lapply(exp_df$n, threshold_detect)) # function:threshold_detect
+       condition_list <- exp_df$condition
+       
+       data_filtered <- filter_missval_new(data_se,condition_list,exp_df)
+     } else {
+       # only keep proteins without any missing values
+       data_filtered <- DEP::filter_proteins(data_se, "complete")
+     }
+     return(data_filtered)
+   })
+   
+   # unimputed_table<-reactive({
+   #   temp<-assay(processed_data())
+   #   temp1<-2^(temp)
+   #   colnames(temp1)<-paste(colnames(temp1),"original_intensity",sep="_")
+   #   temp1<-cbind(ProteinID=rownames(temp1),temp1) 
+   #   #temp1$ProteinID<-rownames(temp1)
+   #   return(as.data.frame(temp1))
+   # })
+   
+   # normalised_data<-reactive({
+   #   normalize_vsn(processed_data())
+   # })
+   
+   imputed_data<-reactive({
+     if (input$imputation == "no_imputation"){
+       processed_data()
+     } else {
+       DEP::impute(processed_data(),input$imputation)
+     }
+   })
+   
+   # do vsn normalisation for FragPipe data
+   norm_type <- reactive({
+     if(length(grep("^LFQ.", colnames(maxquant_data_input()))) !=0){
+       "no"
+     } else {
+       "vsn"
+     }
+   })
+   
+   normalised_data<-reactive({
+     if (norm_type() == "no"){
+       imputed_data()
+     } else {
+       normalize_vsn(imputed_data())
+     }
+   })
+   
+   # imputed_table<-reactive({
+   #   temp<-assay(imputed_data())
+   #   temp1<-2^(temp)
+   #   colnames(temp1)<-paste(colnames(temp1),"imputed_intensity",sep="_")
+   #   temp1<-cbind(ProteinID=rownames(temp1),temp1) #temp1$ProteinID<-rownames(temp1)
+   #   return(as.data.frame(temp1))
+   # })
+   
+   diff_all<-reactive({
+     test_diff(normalised_data(),type = 'all')
+   })
+
+   dep<-reactive({
+     if(input$fdr_correction=="BH"){
+       diff_all<-test_limma(normalised_data(),type='all', design_formula = limma_formula())
+       dep <- add_rejections(diff_all,alpha = input$p, lfc= input$lfc)
+     }
+     else{
+       diff_all<-test_diff(normalised_data(),type='all',design_formula = limma_formula())
+       dep <- add_rejections(diff_all,alpha = input$p, lfc= input$lfc)
+     }
+     dep <- dep[!is.na(rowData(dep)$significant),]
+     return(dep)
+   })
+   
+   # # heatmap cluster
+   # heatmap_cluster <- eventReactive(input$analyze ,{ 
+   #   if(input$analyze==0 ){
+   #     return()
+   #   }
+   #   heatmap_list <- get_cluster_heatmap(dep(),
+   #                                       type="centered",kmeans = TRUE,
+   #                                       k=input$k_number, col_limit = 6,
+   #                                       indicate = "condition"
+   #   )
+   #   return(heatmap_list)
+   # })
+
+ 
+ #### Demo logic ========== ############
+ 
+ env_dm<-reactive({
+   LoadToEnvironment("data/demo_data.RData", env = globalenv())
+ })
+   
+## Get processed data
+   
+processed_data_dm<-reactive({
+     env_dm()[["data_filter"]]
+  })
+
+normalised_data_dm<-reactive({
+  DEP::normalize_vsn(processed_data_dm())
+  })
+
+norm_type_dm <- reactive({"no"})
+
+imputed_data_dm<-reactive({
+  DEP::impute(processed_data_dm(),input$imputation)
+  })
+
+diff_all_dm<-reactive({
+  test_diff(imputed_data_dm(),type = 'all')
+  })
+ 
+multifactor_dm <- reactive({
+  NULL
+})
+
+ dep_dm<-reactive({
+   env_dm()[["dep"]]
+ })
+ 
+ # demo data on occurrence page
+ env_raw <- reactive({
+   LoadToEnvironment("data/raw_demo_data.RData", env = globalenv())
+ })
+ 
+ exp_design_dm <- reactive({
+   env_raw()[["demo_exp_design"]]
+ }) 
+ raw_demo_data <- reactive({
+   env_raw()[["demo_input"]]
+ })
+ 
+ # heatmap_cluster_dm <- reactive({
+ #   heatmap_list <- get_cluster_heatmap(dep_dm(),
+ #                                       type="centered",kmeans = TRUE,
+ #                                       k=6, col_limit = 6,
+ #                                       indicate = "condition"
+ #   )
+ #   return(heatmap_list)
+ # })
+
+ #### Re_Analysis logic ========== ############
+ env_re <- eventReactive(input$reload, {
+   inputFile <- input$rdataFile
+   if (input$reload == 0 | is.null(inputFile)){
+     return(NULL)
+   }
+   path <- inputFile$datapath
+   LoadToEnvironment(path, env = globalenv())
+ })
+
+ # Get input raw data
+ maxquant_data_input_re <-reactive({
+   env_re()[["maxquant_data_input"]]
+ })
+   
+   
+exp_design_re <- reactive({
+  env_re()[["exp_design_input"]]
+})
+ 
+ 
+ ## Get processed data
+ processed_data_re<-reactive({
+   env_re()[["processed_data"]]
+ })
+ normalised_data_re<-reactive({
+   # DEP::normalize_vsn(processed_data_re())
+   env_re()[["normalised_data"]]
+ })
+ 
+ norm_type_re <- reactive({
+   if("norm_type" %in% names(env_re())){
+     env_re()[["norm_type"]]
+   } else {
+     "no" # handle old RData file
+   }
+ })
+ 
+ imputed_data_re<-reactive({
+   # DEP::impute(processed_data_re(),input$imputation)
+   env_re()[["imputed_data"]]
+ })
+ 
+ 
+ diff_all_re<-reactive({
+   test_diff(imputed_data_re(),type = 'all')
+ })
+ 
+ multifactor_re <- eventReactive(input$reload,{
+   if("multifactor" %in% names(env_re())){
+     env_re()[["multifactor"]]
+   } else {
+     NULL # handle old RData file
+   }
+ })
+ 
+ dep_re<-reactive({
+   env_re()[["dep"]]
+ })
+ 
+ val_re <- reactive({
+   env_re()[["var_list"]]
+ })
+
+ lfq_server(id = "lfq_tab" ,processed_data, normalised_data,imputed_data,diff_all, multifactor,dep, maxquant_data_input,exp_design_input,input$p, input$lfc,norm_type)
+ attendance_server(id = "attendance_tab", maxquant_data_input,exp_design_input)
+
+ lfq_server(id = "lfq_tab_dm" ,processed_data_dm, normalised_data_dm,imputed_data_dm,diff_all_dm ,multifactor_dm,dep_dm,raw_demo_data,exp_design_dm,0.05, 1, norm_type_dm)
+ attendance_server(id = "attendance_tab_dm",raw_demo_data,exp_design_dm)
+
+ lfq_server(id = "lfq_tab_re" ,processed_data_re, normalised_data_re,imputed_data_re,diff_all_re, multifactor_re,dep_re,maxquant_data_input_re,exp_design_re, val_re()[1], val_re()[2],norm_type_re)
+ attendance_server(id = "attendance_tab_re", maxquant_data_input_re,exp_design_re)
+ 
+  
+}

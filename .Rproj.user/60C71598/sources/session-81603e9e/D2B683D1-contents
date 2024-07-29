@@ -1,0 +1,290 @@
+# Define UI for data upload app ----
+ui <- function(request){shinyUI(
+  dashboardPage(
+    skin = "red",
+    dashboardHeader(title = "DIA-Analyst"),
+    # disable = TRUE),# Disable title bar
+    dashboardSidebar(
+      # useShinyalert(),
+      sidebarMenu(
+        id="tabs_selected",
+        convertMenuItem(menuItem('Home', icon=icon("home"), selected = TRUE, tabName = "home"), tabName = "home"),
+        convertMenuItem(menuItem("Analysis",  tabName="analysis", icon=icon("flask"),
+                                 fileInput('file1',
+                                           HTML('Upload Spectronaut | DIA-NN<br/>Protein-level file'),
+                                           accept=c('text/csv/tsv/xls',
+                                                    'text/comma-separated-values,text/plain',
+                                                    '.csv', '.xls', '.tsv')),
+                                 
+                                 fileInput('file2',
+                                           'Upload Experimental Design Matrix',
+                                           accept=c('text/csv',
+                                                    'text/comma-separated-values,text/plain',
+                                                    '.csv')),
+                                 
+                                 # editable table for protein data
+                                 tags$strong('Or modify the template:', style = 'margin-left: 15px;'),
+                                 shinyjs::disabled(actionButton("showTable", "Template", icon = icon("table"))),
+                                 
+                                 tags$hr(),
+                                 menuItem("Advanced Options",tabName="advanced", icon = icon("cogs"), 
+                                          selectizeInput("multifactor",
+                                                         "Multifactor analysis",
+                                                         selected = NULL,
+                                                         multiple = TRUE,
+                                                         choices = c("replicate (Paired test)" = "replicate")
+                                                         # choices = ""
+                                                         ),
+                                          numericInput("p", 
+                                                       "Adjusted p-value cutoff",
+                                                       min = 0.0001, max = 0.1, value = 0.05),
+                                          numericInput("lfc",
+                                                       "Log2 fold change cutoff",
+                                                       min = 0, max = 10, value = 1),
+                                          # radioButtons("imputation",
+                                          #              "Imputation type",
+                                          #              choices = c("Perseus-type"="man", MsCoreUtils::imputeMethods())[1:9],
+                                          #              selected = "man"),
+                                          checkboxInput("valid_values",
+                                                        "Keep only proteins with no N/As",
+                                                        FALSE
+                                          ),
+                                          shinyjs::disabled(radioButtons("imputation",
+                                                                         "Imputation type",
+                                                                         choices = c("No imputation" = "no_imputation","Perseus-type"="man", MsCoreUtils::imputeMethods())[1:10],
+                                                                         selected = "man")),
+                                          
+                                          radioButtons("fdr_correction",
+                                                       "Type of FDR correction",
+                                                       choices =  c("Benjamini Hochberg"="BH",
+                                                                    "t-statistics-based"="fdrtool"
+                                                       ), selected= "BH"),
+                                          
+                                          shinyWidgets::prettySwitch(inputId = "contaminants", # by default, remove contaminants
+                                                                     label = "Include contaminants", 
+                                                                     status = "primary",
+                                                                     value = FALSE,
+                                                                     fill = TRUE)
+                                 ),
+                                 tags$hr(),
+                                 actionButton("analyze", "Start Analysis"),
+                                 tags$hr(),
+                                 p(a("Example Spectronaut data", target= "_blank",
+                                     href="data/DIA_data_example.txt", 
+                                     download="DIA_data_example.txt")),
+                                 p(a("Example Experimental Design file", target= "_blank",
+                                     href="data/DIA_experimental_design_example.txt", 
+                                     download="DIA_experimental_design_example.txt"))
+        ), tabName = 'analysis'),
+        
+        convertMenuItem(menuItem('Reload Analysis', icon=icon("upload"), tabName = "re_analysis",
+                                 fileInput("rdataFile",
+                                           "Upload RData file",
+                                           accept = "RData"),
+                                 actionButton("reload", "Reload Analysis"),
+                                 tags$hr()), 
+                        tabName = "re_analysis"),
+        convertMenuItem(menuItem('Demo', icon=icon("eye"), tabName = "demo"), tabName = "demo"),
+        convertMenuItem(menuItem('User Guide', icon=icon("question"), 
+                                 tabName = "info"), tabName = "info")
+      )
+    ), # sidebar close
+    
+    ################################################################ 
+    ## DASHBOARD BODY
+    ################################################################ 
+    
+    dashboardBody(
+      useShinyjs(), #imp to use shinyjs functions
+      #tags$head(includeScript("google_analytics.js")),
+      
+      tags$head(
+        tags$link(rel = "stylesheet", type = "text/css", href = "./css/custom.css")
+      ),
+      tags$head(includeHTML(("google_analytics.html"))),
+      tags$head(tags$script(HTML(
+        '// Enable navigation prompt
+          window.onbeforeunload = function() {
+          return "Changes that you made may not be saved.";};'
+      ))),
+      #  Add logo to the body
+      #  tags$img(src="mbpf_logo.jpg",height=50, align="right"),
+      
+      ## Add tabItems
+      # id="body",
+      tabItems(
+        
+        tabItem(tabName = "home",
+                fluidRow( 
+                  box(
+                    title = "Overview",
+                    h3("DIA-Analyst: An interactive web-platform to analyze and visualize proteomics data 
+                     preprocessed with Spectronaut and DIA-NN."),
+                    p("DIA-Analyst is an easy-to-use, interactive web application developed to perform 
+                  differential expression analysis with “one click” and to visualize label-free quantitative proteomic 
+                  datasets preprocessed with Spectronaut and DIA-NN.  DIA-Analyst provides a wealth of user-analytic features 
+                  and offers numerous publication-quality result output graphics and tables to facilitate statistical 
+                  and exploratory analysis of label-free quantitative datasets. "), 
+                    br(),
+                    HTML('<center><img src="./DIA_analyst.svg" width="600px"></center>'),
+                    br(),
+                    h4("Sidebar tabs"),
+                    tags$ul(
+                      tags$li(tags$b("Analysis: "),"perform your own analysis"), 
+                      tags$li(tags$b("Reload Analysis: "),"reupload your previous analysis"), 
+                      tags$li(tags$b("Demo: "),"familiarise yourself with DIA-Analyst by browsing through pre-analysed results"), 
+                      tags$li(tags$b("User Guide: "), "download an in-depth manual") 
+                    ),
+                    width = 12,
+                    solidHeader = TRUE,
+                    status = "danger"
+                  )#box 1 closed
+                  
+                ) #fluidrow close
+        ), # home tab close
+        tabItem(tabName = "analysis",
+                div(id="quickstart_info",
+                    fluidPage(
+                      box(
+                        title = "Getting Started",
+                        h3(tags$b(span("Quick Start", style="text-decoration:underline"))),
+                        tags$ul(
+                          tags$li("Upload your ", tags$b("protein-level data-matrix "), "generated by Spectronaut or DIA-NN."),
+                          tags$li(tags$b("Experimental design: "), "either upload a text file or modify the template."),
+                          
+                          bsModal("modal", "Interactive protein experiment design table", "showTable", size = "large",
+                                  rHandsontableOutput("exp_protein"),
+                                  actionButton("save_exp","Save"),
+                                  downloadButton('download_exp', 'Download'),
+                                  div(style="display:inline-block;width:30%;text-align: right;",actionButton("original_exp", "Refresh", class="btn-warning")),
+                                  # actionButton("original_exp", "Rewrite"),
+                                  br(),
+                                  tags$b(textOutput("save_message", container = span)),
+                                  br(),
+                                  br(),
+                                  p("(Hint: Drag the mouse to copy the same input)")
+                          ),
+                          
+                          tags$li(tags$b("Optional: "),"Adjust the multifactor analysis, p-value cut-off, the log2 fold change cut-off, 
+                                the imputation type, FDR correction method and/or include contaminants
+                                in the", tags$b("Advanced Options")),
+                          tags$li("Press ", tags$b("'Start Analysis' ")), 
+                          tags$li(tags$b("Hint: "), " Use the ", tags$b("User Guide ")," tab for a detailed explanation of inputs, 
+                                advanced options and outputs"), 
+                          tags$li(tags$b("Note: "), " For experimental design matrix, modify the example file template provided.")
+                        ),
+                        br(),
+                        HTML('<center><img src="./DIA_analyst.svg" width="500px"></center>'),
+                        width = 12,
+                        solidHeader = TRUE,
+                        status = "primary"
+                      )
+                    )
+                ), # QUICKSTART INFO CLOSE
+                shinyjs::hidden(
+                  
+                  div(id = "panel_list",
+                      tabsetPanel(id = "tab_panels",
+                                  type = "tabs",
+                                  selected = "DIA_Analyst",
+                                  tabPanel("DIA Quantification",
+                                           value = "dia_panel",
+                                           dia_ui("dia_tab")
+                                  ),# dia-analyst panel close
+                                  tabPanel('Absence/Presence',
+                                           value = "occ_panel",
+                                           attendance_ui("attendance_tab")
+                                  )  # occurrence panel close
+                      ) # panel_list close
+                  ) # div close
+                  
+                ) # hide close
+                ), #analysis tab close
+        
+        tabItem(tabName = "info",
+                fluidRow( 
+                  box(
+                    title = "User Guide",
+                    h3("DIA-Analyst: Manual"),
+                    div(p(HTML(paste0("A detailed user manual can be accessed",
+                                      a(href = './DIA-Analyst_manual.pdf',
+                                        target='_blank', tags$b("here.")))))),
+                    # div(p("A detailed user manul will coming soon.")), 
+                    
+                    h4("Contact Us"),
+                    p("For any feedback or question regarding DIA-Analyst, please contact the 
+			  Monash Proteomics and Metabolomics Facility:"),
+                    tags$ul(
+                      tags$li("Haijian Zhang: hailey.zhang1(at)monash.edu"),
+                      tags$li("Ralf Schittenhelm: ralf.schittenhelm(at)monash.edu")
+                    ),
+                    
+#                     h4("How to Cite DIA-Analyst?"),
+#                     p(" Please Cite: Shah AD, Goode RJA, Huang C, Powell DR, Schittenhelm RB. 
+# 		LFQ-Analyst: An easy-to-use interactive web-platform to analyze and 
+# 		visualize proteomics data preprocessed with MaxQuant. DOI:XXXX"),   
+                    width = 12,
+                    solidHeader = TRUE,
+                    status = "primary"
+                  ) #includeMarkdown("www/Info.md")
+                )
+        ),# info tab close
+        
+        tabItem(
+          tabName = "demo",
+          tabsetPanel(id = "panel_list_dm",
+                      tabPanel("DIA Quantification",
+                               dia_ui("dia_tab_dm")
+                      ), # DIA panel close
+                      tabPanel("Absence/Presence",
+                               attendance_ui("attendance_tab_dm")
+                      ) # Absence/Presence panel close
+          ) # panel list close
+          
+        ), # demo item close
+
+        tabItem(tabName = "re_analysis",
+                div(id = "reanalysis_info",
+                    fluidPage(
+                      box(
+                        title = "Reload Analysis",
+                        h3(tags$b(span("How to save RData file", style="text-decoration:underline"))),
+                        tags$ul(
+                          tags$li("Save ", tags$b("RData"), " file from your original analysis",
+                                  br(),
+                                  br(),
+                                  HTML('<left><img src="./download_RData.png" width="400px"></left>')),
+                          br(),
+                          tags$li("Upload ", tags$b("output.RData"), " file"),
+                          tags$li("Press ", tags$b("'Reload Analysis'"))
+                        ),
+                        br(),
+                        width = 12,
+                        solidHeader = TRUE,
+                        status = "danger"
+                      ))
+                ), # RE-ANALYSIS INFO CLOSE
+                
+                shinyjs::hidden(
+                  div(id = "re_analysis_panel",
+                      tabsetPanel(id = "panel_list_re",
+                                  tabPanel("DIA Quantification",
+                                           dia_ui("dia_tab_re")
+                                  ), # LFQ panel close
+                                  tabPanel("Absence/Presence",
+                                           attendance_ui("attendance_tab_re")
+                                  ) # Absence/Presence panel close)
+                      ))
+                ) # panel list close
+                
+        ) # re-analysis item close
+
+      ), # Dasbboardbody close
+      tags$footer(
+      tags$p("Supported by: Monash Proteomics and Metabolomics Platform & Monash Bioinformatics Platform, Monash University"),
+      align = "right"), # footer
+      shiny.info::version(position = "bottom right")
+    ) #Dashboard page close
+  ) 
+)#Shiny U Close
+}
