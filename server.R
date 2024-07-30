@@ -150,7 +150,7 @@ server <- function(input, output,session) {
   output$download_svg<-downloadHandler(
     filename = function() { "curve_plot.svg" }, 
     content = function(file) {
-      svg(file)
+      svg(file, width = 12, height = 7)
       print(curve_plot_input())
       dev.off()
     }
