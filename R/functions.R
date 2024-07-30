@@ -1,6 +1,6 @@
 read_exp_func <- function(inFile){
   if (grepl(".csv",inFile$name)){
-    temp_df<-read.csv("/Users/hzha0252/Documents/5. DIA-Analyst/Solvent profilling/data/exptDesign_with_condition&replicates.csv",
+    temp_df<-read.csv(inFile$datapath,
                       header = TRUE,
                       sep=",",
                       stringsAsFactors = FALSE,
