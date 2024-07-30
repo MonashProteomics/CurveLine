@@ -1,5 +1,6 @@
 # Define server logicc----
 server <- function(input, output,session) {
+  options(shiny.maxRequestSize=100*1024^2)## Set maximum upload size to 100MB
   
   ## make reactive elements
   protein_input_data<-reactive({NULL})
