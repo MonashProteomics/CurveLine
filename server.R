@@ -96,7 +96,7 @@ server <- function(input, output,session) {
     protein <- data[selected, "PG.ProteinGroups"]
     exp <- exp_design_input()
     if (length(selected) > 0) {
-      data <- data[selected, grep("PG.Quantity", names(data))]
+      data <- data[selected, grep("PG.Quantity", names(data))] # spectronaut output
       data <- data %>% 
         rownames_to_column() %>% 
         gather(label, intensity, -rowname) %>% 
