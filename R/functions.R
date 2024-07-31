@@ -50,8 +50,8 @@ bootstrap_ci <- function(data, abundance, var, group, n_bootstrap = 1000) {
           ci_upper = NA
         )
       } else {
-        boot_result <- boot(.[[abundance]], statistic = boot_mean, R = n_bootstrap)
-        ci <- boot.ci(boot_result, type = "perc")
+        boot_result <- boot::boot(.[[abundance]], statistic = boot_mean, R = n_bootstrap)
+        ci <- boot::boot.ci(boot_result, type = "perc")
         data.frame(
           mean_abundance = mean(.[[abundance]]),
           ci_lower = if(!is.null(ci)) ci$percent[4] else NA,

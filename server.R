@@ -72,7 +72,28 @@ server <- function(input, output,session) {
   output$contents <- DT::renderDataTable({
     if(!is.null(protein_input_data())){
       data <- protein_input_data()
-      datatable(data, selection = 'single')  # Enable single row selection
+      DT::datatable(data, selection = 'single',
+                    options = list(scrollX = TRUE,
+                                   pageLength = 15,  # Show 15 rows by default
+                                   autoWidth=TRUE,
+                                   columnDefs = list(
+                                     list(targets = 1,
+                                          render = JS(
+                                            "function(data, type, row, meta) {",
+                                            "return type === 'display' && data.length > 30 ?",
+                                            "'<span title=\"' + data + '\">' + data.substr(0, 30) + '...</span>' : data;",
+                                            "}")
+                                     ),
+                                     list(targets = 2:(ncol(data)),
+                                          render = JS(
+                                            "function(data, type, row, meta) {",
+                                            "return type === 'display' && data.length > 15 ?",
+                                            "'<span title=\"' + data + '\">' + data.substr(0, 15) + '...</span>' : data;",
+                                            "}")
+                                     )
+                                   )
+                    )
+                    )  # Enable single row selection
     }
     
   })
@@ -98,9 +119,9 @@ server <- function(input, output,session) {
     if (length(selected) > 0) {
       data <- data[selected, grep("PG.Quantity", names(data))] # spectronaut output
       data <- data %>% 
-        rownames_to_column() %>% 
-        gather(label, intensity, -rowname) %>% 
-        right_join(exp, by = join_by("label"))
+        tibble::rownames_to_column() %>% 
+        tidyr::gather(label, intensity, -rowname) %>% 
+        dplyr::right_join(exp, by = join_by("label"))
       
       # data$rowname <- parse_factor(as.character(data$rowname), levels = protein)
       data[[input$group]] <- factor(data[[input$group]])

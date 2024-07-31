@@ -1,30 +1,3 @@
-library("shiny")
-library("shinyjs")
-library("bslib")
-library("tidyverse")
-library("DT")
-library("DEP")
-library("ggplot2")
-library("boot")
-
-source("R/functions.R")
-options(DT.options = list(scrollX = TRUE,
-                          pageLength = 15,  # Show 15 rows by default
-                          columnDefs= list(list(targets = 1,
-                                                render = JS(
-                                                  "function(data, type, row, meta) {",
-                                                  "return type === 'display' && data.length > 30 ?",
-                                                  "'<span title=\"' + data + '\">' + data.substr(0, 30) + '...</span>' : data;",
-                                                  "}")),
-                                           list(targets = 2:(ncol(data) - 1), #  "_all" apply to all
-                                                render = JS(
-                                                  "function(data, type, row, meta) {",
-                                                  "return type === 'display' && data.length > 15 ?",
-                                                  "'<span title=\"' + data + '\">' + data.substr(0, 15) + '...</span>' : data;",
-                                                  "}"))
-                          )
-))
-
 # Define UI ----
 ui <- page_sidebar(
   # App title ----
