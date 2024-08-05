@@ -3,6 +3,7 @@ VERSION <- "v0.1"
 library("shiny")
 library("shinyjs")
 library("shiny.info")
+library("shinycssloaders") 
 library("bslib")
 library("tidyverse")
 library("DT")

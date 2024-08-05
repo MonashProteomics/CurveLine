@@ -45,7 +45,7 @@ ui <- page_sidebar(
            DT::dataTableOutput("contents")
     ),
     column(6,
-           plotOutput(outputId = "curve_plot"),
+           shinycssloaders::withSpinner(plotOutput(outputId = "curve_plot")),
            div(class = "bottom-right",shinyjs::hidden(downloadButton('download_svg', "Save svg"))),
            tableOutput("results")
            # div(class = "centered-table", tableOutput("results"))
@@ -63,7 +63,7 @@ ui <- page_sidebar(
       border-top: 1px solid #e9ecef;
       position: fixed;
       bottom: 0;
-    width: 100%; "
+      width: 100%; "
     ),
   shiny.info::version(position = "bottom right")
 )
