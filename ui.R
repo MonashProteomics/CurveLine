@@ -51,5 +51,19 @@ ui <- page_sidebar(
            # div(class = "centered-table", tableOutput("results"))
            
     )
-  )
+  ),
+  
+  fluidRow(),
+  tags$footer(
+    tags$p("Supported by: Monash Proteomics and Metabolomics Platform & Monash Bioinformatics Platform, Monash University"),
+    align = "center",
+    style = "
+      font-size: 14px;
+      background-color: #f8f9fa;
+      border-top: 1px solid #e9ecef;
+      position: fixed;
+      bottom: 0;
+    width: 100%; "
+    ),
+  shiny.info::version(position = "bottom right")
 )
