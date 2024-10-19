@@ -72,10 +72,12 @@ server <- function(input, output,session) {
   output$contents <- DT::renderDataTable({
     if(!is.null(protein_input_data())){
       data <- protein_input_data()
-      DT::datatable(data, selection = 'single',
+      DT::datatable(data, 
+                    selection = 'single',
                     options = list(scrollX = TRUE,
                                    pageLength = 15,  # Show 15 rows by default
                                    autoWidth=TRUE,
+                                   searching = TRUE,
                                    columnDefs = list(
                                      list(targets = 1,
                                           render = JS(
