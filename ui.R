@@ -53,7 +53,7 @@ ui <- page_sidebar(
     )
   ),
   
-  fluidRow(),
+  br(),
   tags$footer(
     tags$p("Supported by: Monash Proteomics and Metabolomics Platform & Monash Bioinformatics Platform, Monash University"),
     align = "center",
