@@ -15,6 +15,8 @@ server <- function(input, output,session) {
                           fill= TRUE, 
                           sep = "\t",
                           check.names = F)
+    # replace any NA or NaN in df with 0
+    temp_data[is.na(temp_data)] <- 0
     return(temp_data)
   })
   
