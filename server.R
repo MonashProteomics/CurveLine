@@ -128,7 +128,7 @@ server <- function(input, output,session) {
         dplyr::right_join(exp, by = join_by("label"))
       
       # data$rowname <- parse_factor(as.character(data$rowname), levels = protein)
-      data[[input$group]] <- factor(data[[input$group]])
+      data[[input$group]] <- factor(data[[input$group]], levels = unique(exp[[input$group]]))
       
       # Calculate bootstrapped confidence intervals
       boot_data <- bootstrap_ci(data, "intensity", input$var, input$group)
