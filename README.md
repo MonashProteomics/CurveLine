@@ -3,6 +3,6 @@
 ![R](https://img.shields.io/badge/R-%3E4.4-brightgreen)
 
 # CurveLine
-A tool for assessing individual protein abundances in SPP data across various conditions. 
+A tool for assessing individual protein abundances in SPP data across various conditions https://analyst-suites.org/apps/curveline/
 
 <img width="460" height="232" alt="image" src="https://github.com/user-attachments/assets/076eb168-59b3-4083-bc49-8814b497fdfa" />
